@@ -1,0 +1,24 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: shine-mysql
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: shine1234
+      MYSQL_DATABASE: shine
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  redis:
+    image: redis:7-alpine
+    container_name: shine-redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  mysql-data:

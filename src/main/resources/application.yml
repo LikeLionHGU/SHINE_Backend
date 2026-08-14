@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: shine-backend
+
+  datasource:
+    url: jdbc:mysql://localhost:3307/shine?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: root
+    password: shine1234
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+logging:
+  level:
+    org.hibernate.SQL: debug
+
+server:
+  port: 8080
