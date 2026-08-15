@@ -35,3 +35,9 @@ jwt:
   secret: ${JWT_SECRET:shine-local-dev-secret-key-do-not-use-in-production-2026}
   access-token-validity-ms: 1800000      # 30분
   refresh-token-validity-ms: 1209600000  # 14일
+
+springdoc:
+  swagger-ui:
+    persist-authorization: true
+    tags-sorter: alpha
+    operations-sorter: method
