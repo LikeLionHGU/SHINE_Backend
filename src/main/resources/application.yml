@@ -29,3 +29,9 @@ logging:
 
 server:
   port: 8080
+
+jwt:
+  # 운영에서는 환경변수로 주입한다. HS256은 최소 32바이트가 필요하다.
+  secret: ${JWT_SECRET:shine-local-dev-secret-key-do-not-use-in-production-2026}
+  access-token-validity-ms: 1800000      # 30분
+  refresh-token-validity-ms: 1209600000  # 14일

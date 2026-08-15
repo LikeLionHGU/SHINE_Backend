@@ -119,4 +119,24 @@ public class User extends BaseTimeEntity {
     public void updateLastPeriodDate(LocalDate lastPeriodDate) {
         this.lastPeriodDate = lastPeriodDate;
     }
+
+    // ---------- 로그인 시도 제한 ----------
+
+    public boolean isLocked(LocalDateTime now) {
+        return lockedUntil != null && lockedUntil.isAfter(now);
+    }
+
+    /** 5회 연속 실패하면 10분 잠근다. */
+    public void loginFailed(LocalDateTime now) {
+        this.loginFailCount++;
+        if (this.loginFailCount >= 5) {
+            this.lockedUntil = now.plusMinutes(10);
+            this.loginFailCount = 0;
+        }
+    }
+
+    public void loginSucceeded() {
+        this.loginFailCount = 0;
+        this.lockedUntil = null;
+    }
 }
