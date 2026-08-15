@@ -37,14 +37,9 @@ public record SignupRequest(
         String email,
 
         @Email(message = "보호자 이메일 형식이 올바르지 않아요.")
-        String guardianEmail,
-
-        @AssertTrue(message = "이용약관에 동의해주세요.")
-        boolean termsAgreed,
-
-        @AssertTrue(message = "개인정보 수집·이용에 동의해주세요.")
-        boolean privacyAgreed,
-
-        @AssertTrue(message = "민감정보(건강정보) 수집·이용에 동의해주세요.")
-        boolean sensitiveAgreed
+        String guardianEmail
 ) {}
+
+// 약관 동의 필드는 화면이 없어 일단 제외한다.
+// 서버가 가입 시각으로 채우며, 실제 서비스 전에는 termsAgreed / privacyAgreed /
+// sensitiveAgreed 를 되살려야 한다. 건강정보는 민감정보라 별도 동의가 필요하다.
