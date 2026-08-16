@@ -2,8 +2,10 @@ package com.shine.backend.domain.testsheet.repository;
 
 import com.shine.backend.domain.testsheet.entity.AnalysisStatus;
 import com.shine.backend.domain.testsheet.entity.TestSheet;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -14,7 +16,15 @@ public interface TestSheetRepository extends JpaRepository<TestSheet, Long> {
             Long userId, AnalysisStatus analysisStatus);
 
     /** 기록 타임라인 — 커서 페이지네이션. cursor보다 id가 작은 것들을 최신순으로 */
-    List<TestSheet> findByUserIdAndIdLessThanOrderByIdDesc(Long userId, Long cursor);
+    List<TestSheet> findByUserIdAndIdLessThanOrderByIdDesc(Long userId, Long cursor, Pageable pageable);
 
-    List<TestSheet> findByUserIdOrderByIdDesc(Long userId);
+    List<TestSheet> findByUserIdOrderByIdDesc(Long userId, Pageable pageable);
+
+    /** 분석 탭 — 특정 검사일의 검사지 */
+    Optional<TestSheet> findFirstByUserIdAndTestDateOrderByIdDesc(Long userId, LocalDate testDate);
+
+    /** 분석 탭 날짜 이동 — 이전/다음 검사일 */
+    Optional<TestSheet> findFirstByUserIdAndTestDateLessThanOrderByTestDateDesc(Long userId, LocalDate testDate);
+
+    Optional<TestSheet> findFirstByUserIdAndTestDateGreaterThanOrderByTestDateAsc(Long userId, LocalDate testDate);
 }

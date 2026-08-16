@@ -42,4 +42,25 @@ public interface TestResultRepository extends JpaRepository<TestResult, Long> {
             ORDER BY COUNT(r) DESC
             """)
     List<Object[]> countUnmatchedLabels();
+
+    /**
+     * 여러 검사지의 판정별 개수를 한 번에 센다.
+     * 타임라인에서 검사지마다 따로 세면 N+1이 된다.
+     * 반환: [testSheetId, ResultStatus, count]
+     */
+    @Query("""
+            SELECT r.testSheet.id, r.resultStatus, COUNT(r)
+            FROM TestResult r
+            WHERE r.testSheet.id IN :sheetIds
+            GROUP BY r.testSheet.id, r.resultStatus
+            """)
+    List<Object[]> countStatusBySheetIds(List<Long> sheetIds);
+
+    /** 분석 탭 스파크라인 — 여러 항목의 추이를 한 번에 가져온다 */
+    @Query("""
+            SELECT r FROM TestResult r
+            WHERE r.user.id = :userId AND r.testItem.id IN :itemIds
+            ORDER BY r.testDate ASC
+            """)
+    List<TestResult> findTrendsByItemIds(Long userId, List<Long> itemIds);
 }
