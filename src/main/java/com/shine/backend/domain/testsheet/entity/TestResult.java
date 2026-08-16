@@ -155,4 +155,10 @@ public class TestResult extends BaseTimeEntity {
         this.briefForMom = briefForMom;
         this.briefForDoctor = briefForDoctor;
     }
+
+    /** 검사일이 확정되면 비정규화된 복사본도 함께 갱신한다(설계결정⑧) */
+    public void applySheetDate(java.time.LocalDate testDate, int pregnancyWeek) {
+        this.testDate = testDate;
+        this.pregnancyWeek = pregnancyWeek;
+    }
 }

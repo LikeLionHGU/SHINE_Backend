@@ -2,6 +2,12 @@ spring:
   application:
     name: shine-backend
 
+  servlet:
+    multipart:
+      # 검사 결과지는 보통 2~3장, 최대 5장까지 받는다
+      max-file-size: 10MB
+      max-request-size: 60MB
+
   datasource:
     url: jdbc:mysql://localhost:3307/shine?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
     username: root
@@ -41,3 +47,8 @@ springdoc:
     persist-authorization: true
     tags-sorter: alpha
     operations-sorter: method
+
+app:
+  storage:
+    # 로컬은 프로젝트 아래, 서버는 환경변수로 /var/shine/uploads 등을 지정한다
+    path: ${STORAGE_PATH:./uploads}

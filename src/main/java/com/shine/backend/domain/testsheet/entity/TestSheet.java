@@ -35,6 +35,13 @@ public class TestSheet extends BaseTimeEntity {
     @Column(name = "test_date", nullable = false)
     private LocalDate testDate;
 
+    /**
+     * OCR이 검사지에서 날짜를 읽어냈거나 사용자가 확인해준 경우 true.
+     * false면 추이 그래프의 X축이 어긋날 수 있으므로 사용자에게 물어봐야 한다.
+     */
+    @Column(name = "test_date_confirmed", nullable = false)
+    private boolean testDateConfirmed;
+
     /** 설계결정①의 예외 — 그 시점의 주수가 의미 있으므로 스냅샷으로 저장한다. */
     @Column(name = "pregnancy_week", nullable = false)
     private Integer pregnancyWeek;
@@ -113,5 +120,22 @@ public class TestSheet extends BaseTimeEntity {
         this.ocrRawJson = ocrRawJson;
         this.ocrEngine = ocrEngine;
         this.piiMasked = piiMasked;
+    }
+
+    public void confirmTestDate(LocalDate testDate, int pregnancyWeek) {
+        this.testDate = testDate;
+        this.pregnancyWeek = pregnancyWeek;
+        this.testDateConfirmed = true;
+    }
+
+    public void applyOcrTestDate(LocalDate testDate, int pregnancyWeek) {
+        if (testDate == null) return;
+        this.testDate = testDate;
+        this.pregnancyWeek = pregnancyWeek;
+        this.testDateConfirmed = true;
+    }
+
+    public void applyHospitalName(String hospitalName) {
+        if (this.hospitalName == null) this.hospitalName = hospitalName;
     }
 }

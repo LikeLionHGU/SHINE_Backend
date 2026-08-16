@@ -76,6 +76,7 @@ CREATE TABLE test_sheets (
     id                      BIGINT          NOT NULL AUTO_INCREMENT,
     user_id                 BIGINT          NOT NULL,
     test_date               DATE            NOT NULL,
+    test_date_confirmed     BOOLEAN         NOT NULL DEFAULT FALSE COMMENT 'OCR이 날짜를 못 읽으면 FALSE',
     pregnancy_week          INT             NOT NULL COMMENT '검사 시점 주수 스냅샷',
     hospital_name           VARCHAR(100)    NULL,
     sheet_issued_date       DATE            NULL,

@@ -35,3 +35,6 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### 업로드된 검사지 이미지 ###
+uploads/
