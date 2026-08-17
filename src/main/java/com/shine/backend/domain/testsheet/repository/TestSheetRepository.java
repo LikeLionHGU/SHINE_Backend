@@ -20,11 +20,18 @@ public interface TestSheetRepository extends JpaRepository<TestSheet, Long> {
 
     List<TestSheet> findByUserIdOrderByIdDesc(Long userId, Pageable pageable);
 
-    /** 분석 탭 — 특정 검사일의 검사지 */
-    Optional<TestSheet> findFirstByUserIdAndTestDateOrderByIdDesc(Long userId, LocalDate testDate);
+    /**
+     * 분석 탭 — 특정 검사일의 검사지.
+     * 상태 조건을 쿼리에 넣는다. 한 장만 가져온 뒤 코드에서 거르면
+     * 같은 날짜에 여러 장이 있을 때 엉뚱한 것이 잡혀 결과가 비어버린다.
+     */
+    Optional<TestSheet> findFirstByUserIdAndAnalysisStatusAndTestDateOrderByIdDesc(
+            Long userId, AnalysisStatus analysisStatus, LocalDate testDate);
 
     /** 분석 탭 날짜 이동 — 이전/다음 검사일 */
-    Optional<TestSheet> findFirstByUserIdAndTestDateLessThanOrderByTestDateDesc(Long userId, LocalDate testDate);
+    Optional<TestSheet> findFirstByUserIdAndAnalysisStatusAndTestDateLessThanOrderByTestDateDescIdDesc(
+            Long userId, AnalysisStatus analysisStatus, LocalDate testDate);
 
-    Optional<TestSheet> findFirstByUserIdAndTestDateGreaterThanOrderByTestDateAsc(Long userId, LocalDate testDate);
+    Optional<TestSheet> findFirstByUserIdAndAnalysisStatusAndTestDateGreaterThanOrderByTestDateAscIdAsc(
+            Long userId, AnalysisStatus analysisStatus, LocalDate testDate);
 }

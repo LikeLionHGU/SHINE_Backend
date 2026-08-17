@@ -3,6 +3,7 @@ package com.shine.backend.domain.analysis.service;
 import com.shine.backend.domain.analysis.dto.*;
 import com.shine.backend.domain.testitem.entity.ResultType;
 import com.shine.backend.domain.testitem.entity.TestItemCatalog;
+import com.shine.backend.domain.testsheet.entity.AnalysisStatus;
 import com.shine.backend.domain.testsheet.entity.ResultStatus;
 import com.shine.backend.domain.testsheet.entity.TestResult;
 import com.shine.backend.domain.testsheet.entity.TestSheet;
@@ -26,6 +27,7 @@ public class AnalysisService {
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("M월 d일");
     private static final int SPARKLINE_SIZE = 6;
+    private static final AnalysisStatus DONE = AnalysisStatus.DONE;
 
     private final TestSheetRepository testSheetRepository;
     private final TestResultRepository testResultRepository;
@@ -60,10 +62,14 @@ public class AnalysisService {
                 sheet.getTestDate(),
                 sheet.getTestDate().format(FMT),
                 sheet.getPregnancyWeek(),
-                testSheetRepository.findFirstByUserIdAndTestDateLessThanOrderByTestDateDesc(
-                        userId, sheet.getTestDate()).map(TestSheet::getTestDate).orElse(null),
-                testSheetRepository.findFirstByUserIdAndTestDateGreaterThanOrderByTestDateAsc(
-                        userId, sheet.getTestDate()).map(TestSheet::getTestDate).orElse(null),
+                testSheetRepository
+                        .findFirstByUserIdAndAnalysisStatusAndTestDateLessThanOrderByTestDateDescIdDesc(
+                                userId, DONE, sheet.getTestDate())
+                        .map(TestSheet::getTestDate).orElse(null),
+                testSheetRepository
+                        .findFirstByUserIdAndAnalysisStatusAndTestDateGreaterThanOrderByTestDateAscIdAsc(
+                                userId, DONE, sheet.getTestDate())
+                        .map(TestSheet::getTestDate).orElse(null),
                 items);
     }
 
@@ -109,10 +115,13 @@ public class AnalysisService {
 
     private TestSheet resolveSheet(Long userId, LocalDate date) {
         if (date != null) {
-            return testSheetRepository.findFirstByUserIdAndTestDateOrderByIdDesc(userId, date).orElse(null);
+            return testSheetRepository
+                    .findFirstByUserIdAndAnalysisStatusAndTestDateOrderByIdDesc(userId, DONE, date)
+                    .orElse(null);
         }
-        return testSheetRepository.findFirstByUserIdAndAnalysisStatusOrderByTestDateDesc(
-                userId, com.shine.backend.domain.testsheet.entity.AnalysisStatus.DONE).orElse(null);
+        return testSheetRepository
+                .findFirstByUserIdAndAnalysisStatusOrderByTestDateDesc(userId, DONE)
+                .orElse(null);
     }
 
     private AnalysisItemResponse toItem(TestResult r, Map<Long, List<TestResult>> trendMap) {
