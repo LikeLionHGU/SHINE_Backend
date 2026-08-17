@@ -20,6 +20,8 @@ import com.shine.backend.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -44,6 +46,7 @@ public class HomeService {
     private final QuestionRepository questionRepository;
     private final AppointmentRepository appointmentRepository;
     private final NutritionRecommender nutritionRecommender;
+    private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
     public HomeResponse getHome(Long userId) {
@@ -68,7 +71,7 @@ public class HomeService {
                 GREETING,
                 latestSheet(sheet, results),
                 questions(userId, sheet),
-                nutritions(results),
+                nutritions(sheet, results),
                 weeklyCalendar(userId, today));
     }
 
@@ -125,8 +128,36 @@ public class HomeService {
 
     // ---------- 추천 재료 ----------
 
+    /**
+     * 프론트가 만든 추천 음식이 저장돼 있으면 그걸 쓴다.
+     * 검사지 화면과 홈 화면에 다른 재료가 뜨면 사용자가 혼란스럽다.
+     * 없을 때만 서버가 계산한다.
+     */
+    private List<NutritionRecommender.Food> nutritions(TestSheet sheet, List<TestResult> results) {
+        List<NutritionRecommender.Food> saved = parseSavedFoods(sheet);
+        if (!saved.isEmpty()) return saved;
+        return calculateNutritions(results);
+    }
+
+    private List<NutritionRecommender.Food> parseSavedFoods(TestSheet sheet) {
+        if (sheet == null || sheet.getNutritionFoods() == null) return List.of();
+        try {
+            JsonNode array = objectMapper.readTree(sheet.getNutritionFoods());
+            List<NutritionRecommender.Food> foods = new ArrayList<>();
+            for (JsonNode node : array) {
+                String name = node.path("name").asString();
+                if (name == null || name.isBlank()) continue;
+                foods.add(new NutritionRecommender.Food(
+                        name, null, node.path("reason").asString(), null));
+            }
+            return foods;
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
     /** 정상 범위보다 낮게 나온 항목만 추천 근거로 쓴다. 다 정상이면 추천할 것이 없다. */
-    private List<NutritionRecommender.Food> nutritions(List<TestResult> results) {
+    private List<NutritionRecommender.Food> calculateNutritions(List<TestResult> results) {
         Map<String, String> itemNames = new HashMap<>();
         Set<String> lowCodes = new LinkedHashSet<>();
 

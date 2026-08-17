@@ -24,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -51,6 +52,7 @@ public class CompatReportService {
     private final QuestionRepository questionRepository;
     private final TestSheetAnalyzer analyzer;
     private final ValueSplitter valueSplitter;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public ReportResponse save(Long userId, ReportUploadRequest request) {
@@ -77,6 +79,8 @@ public class CompatReportService {
         testResultRepository.saveAll(rows.stream().map(row -> toEntity(sheet, row)).toList());
 
         sheet.markDone(request.summary(), null, "frontend-openai", null);
+        // 홈 화면과 검사지 화면에 다른 재료가 뜨지 않도록 프론트가 만든 것을 저장해둔다
+        sheet.applyNutritionFoods(toJson(request.foods()));
         saveQuestions(user, sheet, request.questions());
 
         long matched = rows.stream().filter(AnalyzedRow::isMatched).count();
@@ -232,6 +236,16 @@ public class CompatReportService {
             return LocalDate.parse(value);
         } catch (Exception e) {
             log.warn("검사일 파싱 실패 '{}'", raw);
+            return null;
+        }
+    }
+
+    private String toJson(List<ReportUploadRequest.FoodDto> foods) {
+        if (foods == null || foods.isEmpty()) return null;
+        try {
+            return objectMapper.writeValueAsString(foods);
+        } catch (Exception e) {
+            log.warn("추천 음식 직렬화 실패", e);
             return null;
         }
     }

@@ -86,6 +86,14 @@ public class TestSheet extends BaseTimeEntity {
     @Column(name = "summary_for_doctor", length = 2000)
     private String summaryForDoctor;
 
+    /**
+     * 프론트 AI가 추천한 음식. 화면마다 다른 재료가 뜨지 않도록 저장해두고 재사용한다.
+     * [{"name":"시금치","reason":"철분이 많아요"}]
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "nutrition_foods")
+    private String nutritionFoods;
+
     @Column(name = "llm_model", length = 50)
     private String llmModel;
 
@@ -137,5 +145,9 @@ public class TestSheet extends BaseTimeEntity {
 
     public void applyHospitalName(String hospitalName) {
         if (this.hospitalName == null) this.hospitalName = hospitalName;
+    }
+
+    public void applyNutritionFoods(String nutritionFoods) {
+        this.nutritionFoods = nutritionFoods;
     }
 }

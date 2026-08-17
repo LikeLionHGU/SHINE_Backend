@@ -28,6 +28,13 @@ public class Appointment extends BaseTimeEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    /**
+     * 프론트가 자체 생성한 id("visit-2026-08-16" 등)를 그대로 보관한다.
+     * 이걸 저장해두면 프론트가 서버 id로 갈아끼울 필요가 없다.
+     */
+    @Column(name = "client_id", length = 64)
+    private String clientId;
+
     @Column(nullable = false, length = 50)
     private String title;
 
@@ -68,5 +75,9 @@ public class Appointment extends BaseTimeEntity {
         if (visitStatus != null) this.visitStatus = visitStatus;
         if (pregnancyWeek != null) this.pregnancyWeek = pregnancyWeek;
         this.createdBy = ScheduleSource.USER;
+    }
+
+    public void assignClientId(String clientId) {
+        if (this.clientId == null) this.clientId = clientId;
     }
 }

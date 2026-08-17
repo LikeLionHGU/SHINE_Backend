@@ -75,6 +75,7 @@ public class AppCalendarService {
                     .obgyn(request.isHospital())
                     .visitStatus(VisitStatus.SCHEDULED)
                     .createdBy(ScheduleSource.USER)
+                    .clientId(request.id() == null || request.id().isBlank() ? null : request.id().trim())
                     .build();
             appointmentRepository.save(appointment);
         } else {
@@ -168,7 +169,8 @@ public class AppCalendarService {
                 .map(Question::getContent).toList();
 
         return new AppDtos.CalendarVisit(
-                String.valueOf(a.getId()),
+                // 프론트가 만든 id가 있으면 그걸 돌려준다. 프론트가 id를 갈아끼울 필요가 없다.
+                a.getClientId() != null ? a.getClientId() : String.valueOf(a.getId()),
                 at.toLocalDate().format(SHORT),
                 a.getTitle(),
                 a.getLocation() == null ? "" : a.getLocation(),
@@ -189,12 +191,18 @@ public class AppCalendarService {
 
     private Appointment findExisting(Long userId, String id) {
         if (id == null || id.isBlank()) return null;
+        String key = id.trim();
+
+        // 프론트가 만든 id("visit-2026-08-16")로 먼저 찾는다
+        Appointment byClientId = appointmentRepository.findByUserIdAndClientId(userId, key).orElse(null);
+        if (byClientId != null) return byClientId;
+
+        // 서버 id(숫자)로도 찾을 수 있게 둔다
         try {
-            return appointmentRepository.findById(Long.parseLong(id.trim()))
+            return appointmentRepository.findById(Long.parseLong(key))
                     .filter(a -> a.getUser().getId().equals(userId))
                     .orElse(null);
         } catch (NumberFormatException e) {
-            // 프론트가 자체 생성한 id면 서버에 없다. 새로 만든다.
             return null;
         }
     }

@@ -13,7 +13,7 @@ public record UserUpdateRequest(
         @Size(max = 30)
         String nickname,
 
-        @Pattern(regexp = "^01[0-9]-\\d{3,4}-\\d{4}$", message = "휴대폰 번호 형식이 올바르지 않아요.")
+        @Pattern(regexp = "^[+0-9][0-9 -]{7,19}$", message = "휴대폰 번호 형식이 올바르지 않아요.")
         String phoneNumber,
 
         @Email(message = "이메일 형식이 올바르지 않아요.")
