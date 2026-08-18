@@ -1,0 +1,54 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: shine-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: shine
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    # 외부에 열지 않는다. 앱 컨테이너에서만 접근하면 된다.
+    expose:
+      - "3306"
+
+  redis:
+    image: redis:7-alpine
+    container_name: shine-redis
+    restart: always
+    expose:
+      - "6379"
+
+  app:
+    build: .
+    container_name: shine-app
+    restart: always
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_HOST: mysql
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-1800000}
+      STORAGE_PATH: /app/uploads
+    ports:
+      - "8080:8080"
+    volumes:
+      # 검사지 이미지는 컨테이너를 다시 만들어도 남아야 한다
+      - uploads:/app/uploads
+
+volumes:
+  mysql-data:
+  uploads:
