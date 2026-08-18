@@ -2,6 +2,7 @@ package com.shine.backend.domain.testsheet.service;
 
 import com.shine.backend.domain.testsheet.analyzer.AnalyzedRow;
 import com.shine.backend.domain.testsheet.analyzer.TestSheetAnalyzer;
+import com.shine.backend.domain.testsheet.analyzer.VerdictGenerator;
 import com.shine.backend.domain.testsheet.entity.TestResult;
 import com.shine.backend.domain.testsheet.entity.TestSheet;
 import com.shine.backend.domain.testsheet.event.TestSheetUploadedEvent;
@@ -35,6 +36,7 @@ public class TestSheetAnalysisRunner {
     private final TestResultRepository testResultRepository;
     private final TestSheetAnalyzer analyzer;
     private final OcrClient ocrClient;
+    private final VerdictGenerator verdictGenerator;
 
     /**
      * 업로드 트랜잭션이 커밋된 뒤에 실행된다.
@@ -109,6 +111,7 @@ public class TestSheetAnalysisRunner {
                 .resultStatus(row.resultStatus())
                 .sheetVerdict(row.sheetVerdict())
                 .verdictMismatch(row.verdictMismatch())
+                .briefForMom(verdictGenerator.generate(row))
                 .editedByUser(false)
                 .build();
     }

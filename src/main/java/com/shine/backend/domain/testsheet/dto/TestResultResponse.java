@@ -27,6 +27,8 @@ public record TestResultResponse(
         /** 안심 / 주의 / 위험. UNKNOWN이면 null */
         String statusLabel,
         String description,
+        /** 이번 수치가 왜 그 판정인지. 코드가 만든 문장이라 판정과 어긋나지 않는다 */
+        String verdict,
         boolean isEditedByUser,
         Highlight highlight
 ) {
@@ -59,6 +61,7 @@ public record TestResultResponse(
                 r.getResultStatus(),
                 label(r.getResultStatus()),
                 item == null ? null : item.getBriefForMom(),
+                r.getBriefForMom(),
                 r.isEditedByUser(),
                 highlight);
     }

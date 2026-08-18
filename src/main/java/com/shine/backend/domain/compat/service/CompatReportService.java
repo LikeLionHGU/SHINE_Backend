@@ -11,6 +11,7 @@ import com.shine.backend.domain.testitem.entity.ResultType;
 import com.shine.backend.domain.testitem.entity.TestItemCatalog;
 import com.shine.backend.domain.testsheet.analyzer.AnalyzedRow;
 import com.shine.backend.domain.testsheet.analyzer.TestSheetAnalyzer;
+import com.shine.backend.domain.testsheet.analyzer.VerdictGenerator;
 import com.shine.backend.domain.testsheet.entity.*;
 import com.shine.backend.domain.testsheet.ocr.OcrResult;
 import com.shine.backend.domain.testsheet.ocr.OcrRow;
@@ -52,6 +53,7 @@ public class CompatReportService {
     private final QuestionRepository questionRepository;
     private final TestSheetAnalyzer analyzer;
     private final ValueSplitter valueSplitter;
+    private final VerdictGenerator verdictGenerator;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -134,6 +136,8 @@ public class CompatReportService {
                 .resultStatus(row.resultStatus())
                 .sheetVerdict(row.sheetVerdict())
                 .verdictMismatch(row.verdictMismatch())
+                // 저장해둬야 나중에 /test-sheets/{id} 로 다시 볼 때도 같은 문장이 나온다
+                .briefForMom(verdictGenerator.generate(row))
                 .editedByUser(false)
                 .build();
     }
@@ -176,36 +180,8 @@ public class CompatReportService {
      * AI가 만든 문장을 그대로 쓰면 서버 판정과 어긋날 수 있다.
      */
     private String verdict(AnalyzedRow row, TestItemCatalog item, ParsedTestItemDto origin) {
-        if (item == null || row.resultStatus() == ResultStatus.UNKNOWN) {
-            return origin.verdict();
-        }
-
-        String name = item.getNameKo();
-
-        // 정량 — 범위라는 개념이 있다
-        if (row.resultType() == ResultType.NUMBER && row.numberValue() != null) {
-            String tail = switch (row.resultStatus()) {
-                case NORMAL -> "정상 범위 안에 있어요.";
-                case CAUTION -> "정상 범위 경계에 있어요. 선생님과 이야기해 보세요.";
-                case DANGER -> "정상 범위를 벗어났어요. 선생님과 이야기해 보세요.";
-                default -> "";
-            };
-            String unit = row.unit() == null ? "" : " " + row.unit();
-            return "%s 수치가 %s%s로 %s".formatted(
-                    name, row.numberValue().stripTrailingZeros().toPlainString(), unit, tail);
-        }
-
-        // 정성 — 음성/양성에는 범위가 없다. "정상 범위"라는 표현을 쓰면 어색하다
-        if (row.textValue() != null) {
-            String tail = switch (row.resultStatus()) {
-                case NORMAL -> "이번 검사에서는 이상이 확인되지 않았어요.";
-                case CAUTION -> "한 번 더 확인이 필요할 수 있어요. 선생님과 이야기해 보세요.";
-                case DANGER -> "선생님과 꼭 이야기해 보세요.";
-                default -> "";
-            };
-            return "%s 결과가 %s으로 나왔어요.\n%s".formatted(name, row.textValue(), tail);
-        }
-        return origin.verdict();
+        String generated = verdictGenerator.generate(row);
+        return generated != null ? generated : origin.verdict();
     }
 
     private void saveQuestions(User user, TestSheet sheet, List<String> questions) {
