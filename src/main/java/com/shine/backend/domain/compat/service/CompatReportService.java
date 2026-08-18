@@ -6,6 +6,7 @@ import com.shine.backend.domain.compat.dto.ReportUploadRequest;
 import com.shine.backend.domain.question.entity.Question;
 import com.shine.backend.domain.question.entity.QuestionSource;
 import com.shine.backend.domain.question.entity.QuestionStatus;
+import com.shine.backend.domain.nutrition.AllowedFoods;
 import com.shine.backend.domain.question.repository.QuestionRepository;
 import com.shine.backend.domain.testitem.entity.ResultType;
 import com.shine.backend.domain.testitem.entity.TestItemCatalog;
@@ -30,6 +31,7 @@ import tools.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
@@ -54,6 +56,7 @@ public class CompatReportService {
     private final TestSheetAnalyzer analyzer;
     private final ValueSplitter valueSplitter;
     private final VerdictGenerator verdictGenerator;
+    private final AllowedFoods allowedFoods;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -82,7 +85,8 @@ public class CompatReportService {
 
         sheet.markDone(request.summary(), null, "frontend-openai", null);
         // 홈 화면과 검사지 화면에 다른 재료가 뜨지 않도록 프론트가 만든 것을 저장해둔다
-        sheet.applyNutritionFoods(toJson(request.foods()));
+        List<ReportUploadRequest.FoodDto> foods = filterFoods(request.foods());
+        sheet.applyNutritionFoods(toJson(foods));
         saveQuestions(user, sheet, request.questions());
 
         long matched = rows.stream().filter(AnalyzedRow::isMatched).count();
@@ -96,7 +100,7 @@ public class CompatReportService {
                 toItems(rows, request.items()),
                 request.summary(),
                 request.questions(),
-                request.foods());
+                foods);
     }
 
     // ---------- 변환 ----------
@@ -224,5 +228,26 @@ public class CompatReportService {
             log.warn("추천 음식 직렬화 실패", e);
             return null;
         }
+    }
+
+    /**
+     * 목록에 없는 음식을 걸러낸다.
+     * 프롬프트로 제약해도 AI가 가끔 벗어나고, 이미지가 없는 재료가 화면에 뜨면 깨진다.
+     * 임신 중 금기 식품(동물의 간, 참치 대뱃살, 다시마)이 섞이는 것도 여기서 막힌다.
+     */
+    private List<ReportUploadRequest.FoodDto> filterFoods(List<ReportUploadRequest.FoodDto> foods) {
+        if (foods == null || foods.isEmpty()) return List.of();
+
+        LinkedHashMap<String, ReportUploadRequest.FoodDto> picked = new LinkedHashMap<>();
+        for (ReportUploadRequest.FoodDto food : foods) {
+            String canonical = allowedFoods.canonicalize(food.name());
+            if (canonical == null) {
+                log.info("추천 목록 밖 음식 제외: {}", food.name());
+                continue;
+            }
+            picked.putIfAbsent(canonical,
+                    new ReportUploadRequest.FoodDto(canonical, food.reason()));
+        }
+        return List.copyOf(picked.values());
     }
 }
