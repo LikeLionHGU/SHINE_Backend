@@ -12,6 +12,9 @@ import com.shine.backend.global.exception.BusinessException;
 import com.shine.backend.global.exception.ErrorCode;
 import com.shine.backend.global.storage.FileStorage;
 import com.shine.backend.domain.testsheet.event.TestSheetUploadedEvent;
+import com.shine.backend.domain.question.entity.Question;
+import com.shine.backend.domain.question.repository.QuestionRepository;
+import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -33,6 +36,8 @@ public class TestSheetService {
     private final UserRepository userRepository;
     private final FileStorage fileStorage;
     private final ApplicationEventPublisher eventPublisher;
+    private final QuestionRepository questionRepository;
+    private final ObjectMapper objectMapper;
 
     /**
      * 이미지를 저장하고 분석을 예약한다. 분석을 기다리지 않고 바로 응답한다.
@@ -91,7 +96,10 @@ public class TestSheetService {
             throw new BusinessException(ErrorCode.ANALYSIS_NOT_DONE);
         }
 
-        return TestSheetDetailResponse.of(sheet, testResultRepository.findBySheetWithItem(testSheetId));
+        return TestSheetDetailResponse.of(sheet,
+                testResultRepository.findBySheetWithItem(testSheetId),
+                foodsOf(sheet),
+                questionsOf(testSheetId));
     }
 
     /**
@@ -128,6 +136,23 @@ public class TestSheetService {
             throw new BusinessException(ErrorCode.NOT_FOUND, "해당 페이지가 없습니다.");
         }
         return fileStorage.read(keys.get(page - 1));
+    }
+
+    /** 업로드 때 저장해둔 추천 재료를 복원한다. 깨져 있으면 조용히 비운다. */
+    private List<TestSheetDetailResponse.Food> foodsOf(TestSheet sheet) {
+        String json = sheet.getNutritionFoods();
+        if (json == null || json.isBlank()) return List.of();
+        try {
+            var arr = objectMapper.readValue(json, TestSheetDetailResponse.Food[].class);
+            return arr == null ? List.of() : List.of(arr);
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    private List<String> questionsOf(Long testSheetId) {
+        return questionRepository.findByTestSheetIdOrderByIdDesc(testSheetId).stream()
+                .map(Question::getContent).toList();
     }
 
     private TestSheet findOwned(Long userId, Long testSheetId) {

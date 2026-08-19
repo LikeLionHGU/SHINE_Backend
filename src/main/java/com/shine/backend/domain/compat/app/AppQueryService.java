@@ -65,6 +65,9 @@ public class AppQueryService {
 
         return sheets.stream()
                 .filter(s -> s.getAnalysisStatus() == AnalysisStatus.DONE)
+                // 지난 검사지를 나중에 올려도 타임라인 제자리에 꽂히도록 검사일로 정렬한다
+                .sorted(Comparator.comparing(TestSheet::getTestDate)
+                        .thenComparing(TestSheet::getId).reversed())
                 .map(s -> new AppDtos.RecordEntry(
                         String.valueOf(s.getId()),
                         s.getTestDate().format(SHORT),
@@ -89,31 +92,28 @@ public class AppQueryService {
 
     @Transactional(readOnly = true)
     public List<AppDtos.TrendIndicator> getTrends(Long userId) {
-        TestSheet latest = testSheetRepository
-                .findFirstByUserIdAndAnalysisStatusOrderByTestDateDesc(userId, AnalysisStatus.DONE)
-                .orElse(null);
-        if (latest == null) return List.of();
-
-        List<TestResult> current = testResultRepository.findBySheetWithItem(latest.getId());
-
-        List<Long> itemIds = current.stream()
-                .map(TestResult::getTestItem).filter(Objects::nonNull)
-                .map(TestItemCatalog::getId).distinct().toList();
+        // 최신 검사지에 있는 항목만 보면, 지난 검사에만 있던 항목의 추이를
+        // 영영 볼 수 없게 된다. 지금까지 잰 모든 항목을 대상으로 한다.
+        List<Long> itemIds = testResultRepository.findMeasuredItemIds(userId);
         if (itemIds.isEmpty()) return List.of();
 
         Map<Long, List<TestResult>> histories = testResultRepository
                 .findTrendsByItemIds(userId, itemIds).stream()
                 .collect(Collectors.groupingBy(r -> r.getTestItem().getId()));
 
-        return current.stream()
-                .filter(r -> r.getTestItem() != null)
-                .filter(r -> r.getResultStatus() != ResultStatus.UNKNOWN)
+        return histories.values().stream()
+                // 항목마다 가장 최근에 제대로 판정된 측정을 대표값으로 쓴다.
+                // 최신 값이 OCR 오독으로 미분류가 되어도 이전 값으로 그래프는 살린다.
+                .map(h -> h.stream()
+                        .filter(r -> r.getResultStatus() != ResultStatus.UNKNOWN)
+                        .reduce((a, b) -> b).orElse(null))
+                .filter(Objects::nonNull)
                 // 꺾은선을 그릴 수 있는 항목만. 음성/양성에는 높낮이가 없고,
                 // 면역검사의 cut-off 지수(0.07 등)는 추이로 볼 값이 아니다.
                 .filter(r -> r.getTestItem().isTrendable()
                         && r.getTestItem().getResultType() == ResultType.NUMBER)
                 .sorted(Comparator.comparingInt(r -> severity(r.getResultStatus())))
-                .map(r -> toIndicator(r, histories.getOrDefault(r.getTestItem().getId(), List.of())))
+                .map(r -> toIndicator(r, histories.get(r.getTestItem().getId())))
                 .toList();
     }
 
@@ -132,6 +132,7 @@ public class AppQueryService {
         LinkedHashMap<String, AppDtos.TrendPoint> byDate = new LinkedHashMap<>();
         history.stream()
                 .filter(r -> r.getNumberValue() != null)
+                .filter(r -> r.getResultStatus() != ResultStatus.UNKNOWN)
                 .forEach(r -> byDate.put(
                         r.getTestDate().format(MONTH_DAY),
                         new AppDtos.TrendPoint(

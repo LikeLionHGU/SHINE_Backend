@@ -63,4 +63,14 @@ public interface TestResultRepository extends JpaRepository<TestResult, Long> {
             ORDER BY r.testDate ASC
             """)
     List<TestResult> findTrendsByItemIds(Long userId, List<Long> itemIds);
+
+    /**
+     * 분석 탭 — 사용자가 지금까지 측정한 모든 항목.
+     * 최신 검사지에 없는 항목이라도 과거에 쟀다면 추이를 볼 수 있어야 한다.
+     */
+    @Query("""
+            SELECT DISTINCT r.testItem.id FROM TestResult r
+            WHERE r.user.id = :userId AND r.testItem IS NOT NULL
+            """)
+    List<Long> findMeasuredItemIds(Long userId);
 }

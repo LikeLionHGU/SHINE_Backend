@@ -21,15 +21,25 @@ public record TestSheetDetailResponse(
         List<Image> images,
         Summary summary,
         Counts counts,
-        List<TestResultResponse> results
+        List<TestResultResponse> results,
+        List<Food> foods,
+        List<String> questions
 ) {
     public record Image(int page, String imageUrl) {}
+
+    /** 업로드 때 저장해둔 추천 재료. 기록 탭에서 다시 열어도 같은 게 보여야 한다. */
+    public record Food(String name, String reason) {}
 
     public record Summary(String summaryForMom, String llmModel, String promptVersion) {}
 
     public record Counts(long danger, long caution, long normal, long unknown, int total) {}
 
     public static TestSheetDetailResponse of(TestSheet sheet, List<TestResult> results) {
+        return of(sheet, results, List.of(), List.of());
+    }
+
+    public static TestSheetDetailResponse of(TestSheet sheet, List<TestResult> results,
+                                             List<Food> foods, List<String> questions) {
         // 위험한 것부터 보여준다
         List<TestResultResponse> sorted = results.stream()
                 .sorted(Comparator
@@ -49,7 +59,9 @@ public record TestSheetDetailResponse(
                 buildImages(sheet),
                 new Summary(sheet.getSummaryForMom(), sheet.getLlmModel(), sheet.getPromptVersion()),
                 count(results),
-                sorted);
+                sorted,
+                foods == null ? List.of() : foods,
+                questions == null ? List.of() : questions);
     }
 
     private static List<Image> buildImages(TestSheet sheet) {

@@ -167,15 +167,18 @@ public class CompatReportService {
     }
 
     /**
-     * 판정을 못 한 항목(혈액형처럼 정상/이상 개념이 없는 것)은
-     * 프론트가 보낸 값을 그대로 둔다. 억지로 "주의"를 붙이면 이상하다.
+     * 판정을 못 했으면 못 했다고 말한다.
+     *
+     * 프론트가 보낸 값을 그대로 돌려주면 저장된 값과 어긋나서,
+     * 업로드 직후엔 "안심"이던 항목이 기록 탭에서는 미분류로 바뀐다.
+     * 사용자 눈에는 데이터가 망가진 것으로 보인다.
      */
     private String statusLabel(ResultStatus status, String fallback) {
         return switch (status) {
             case NORMAL -> "안심";
             case CAUTION -> "주의";
             case DANGER -> "위험";
-            case UNKNOWN -> fallback == null ? "안심" : fallback;
+            case UNKNOWN -> null;
         };
     }
 
@@ -184,6 +187,8 @@ public class CompatReportService {
      * AI가 만든 문장을 그대로 쓰면 서버 판정과 어긋날 수 있다.
      */
     private String verdict(AnalyzedRow row, TestItemCatalog item, ParsedTestItemDto origin) {
+        // 판정을 못 한 항목에 AI가 쓴 "정상입니다"를 붙이면 저장된 값과 어긋난다
+        if (row.resultStatus() == ResultStatus.UNKNOWN) return null;
         String generated = verdictGenerator.generate(row);
         return generated != null ? generated : origin.verdict();
     }
