@@ -88,7 +88,7 @@ public class AuthService {
         String refreshToken = null;
 
         // '자동 로그인'을 체크했을 때만 리프레시를 발급한다
-        if (request.autoLogin()) {
+        if (request.isAutoLogin()) {
             refreshToken = jwtProvider.createRefreshToken(user.getId());
             refreshTokenService.save(user.getId(), refreshToken, jwtProvider.getRefreshValidityMs());
         }

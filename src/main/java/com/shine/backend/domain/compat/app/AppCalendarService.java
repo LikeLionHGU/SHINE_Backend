@@ -24,6 +24,7 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Stream;
 
 /**
  * 프론트 client.ts 의 캘린더 함수들을 대체한다.
@@ -87,10 +88,35 @@ public class AppCalendarService {
         return toVisit(appointment);
     }
 
+    /**
+     * 조용히 성공을 돌려주면 클라이언트가 삭제 실패를 감지할 수 없다.
+     * 없는 것과 남의 것을 구분해서 알려준다.
+     */
     @Transactional
     public void deleteVisit(Long userId, String id) {
-        Appointment appointment = findExisting(userId, id);
-        if (appointment != null) appointmentRepository.delete(appointment);
+        Appointment appointment = findAnyById(id);
+        if (appointment == null) {
+            throw new BusinessException(ErrorCode.VISIT_NOT_FOUND);
+        }
+        if (!appointment.getUser().getId().equals(userId)) {
+            throw new BusinessException(ErrorCode.VISIT_NOT_OWNED);
+        }
+        appointmentRepository.delete(appointment);
+    }
+
+    /** 소유자를 가리지 않고 찾는다. 소유권 판단은 호출부에서 한다. */
+    private Appointment findAnyById(String id) {
+        if (id == null || id.isBlank()) return null;
+        String key = id.trim();
+
+        Appointment byClientId = appointmentRepository.findByClientId(key).orElse(null);
+        if (byClientId != null) return byClientId;
+
+        try {
+            return appointmentRepository.findById(Long.parseLong(key)).orElse(null);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     // ---------- 캘린더 마커 ----------
@@ -111,8 +137,12 @@ public class AppCalendarService {
                         userId, ym.atDay(1).atStartOfDay(), ym.atEndOfMonth().atTime(23, 59, 59))
                 .forEach(a -> {
                     int day = a.getVisitAt().getDayOfMonth();
-                    marks.put(day, "scheduled");
-                    if (!a.isObgyn()) labels.put(day, a.getTitle());
+                    // 산부인과만 원으로 표시하고, 그 외 일정은 제목 텍스트로만 보여준다
+                    if (a.isObgyn()) {
+                        marks.put(day, "scheduled");
+                    } else {
+                        labels.put(day, a.getTitle());
+                    }
                 });
 
         testSheetRepository.findByUserIdOrderByIdDesc(userId,
@@ -144,7 +174,8 @@ public class AppCalendarService {
         List<String> suggested = new ArrayList<>();
         List<String> written = new ArrayList<>();
 
-        for (TestSheet sheet : List.of(today, previous).stream().filter(Objects::nonNull).toList()) {
+        // List.of 는 null 원소를 받으면 NPE를 던진다. Stream.of 를 써야 한다.
+        for (TestSheet sheet : Stream.of(today, previous).filter(Objects::nonNull).toList()) {
             for (Question q : questionRepository.findByTestSheetIdOrderByIdDesc(sheet.getId())) {
                 if (!q.getUser().getId().equals(userId)) continue;
                 // AI는 "물어볼 질문"을 추천한 것이고, USER는 직접 적은 것이다

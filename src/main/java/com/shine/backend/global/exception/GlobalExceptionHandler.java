@@ -3,6 +3,7 @@ package com.shine.backend.global.exception;
 import com.shine.backend.global.response.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -34,6 +35,18 @@ public class GlobalExceptionHandler {
         ErrorCode code = ErrorCode.INVALID_INPUT;
         return ResponseEntity.status(code.getStatus())
                 .body(ApiResponse.error(code, Map.of("errors", errors)));
+    }
+
+    /**
+     * 요청 본문이 JSON으로 해석되지 않는 경우.
+     * 핸들러가 없으면 아래 fallback으로 내려가 500이 되고,
+     * 사용자에게 "서버 오류"가 노출된다.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Object>> handleUnreadable(HttpMessageNotReadableException e) {
+        log.warn("요청 본문 해석 실패: {}", e.getMessage());
+        ErrorCode code = ErrorCode.INVALID_INPUT;
+        return ResponseEntity.status(code.getStatus()).body(ApiResponse.error(code));
     }
 
     /** 예상 못 한 예외. 내부 메시지를 사용자에게 노출하지 않는다. */

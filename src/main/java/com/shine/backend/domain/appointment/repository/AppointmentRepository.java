@@ -26,4 +26,7 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
 
     /** 프론트가 만든 id로 찾는다 */
     Optional<Appointment> findByUserIdAndClientId(Long userId, String clientId);
+
+    /** 소유자 무관 조회. 삭제 시 404와 403을 구분하기 위함 */
+    Optional<Appointment> findByClientId(String clientId);
 }

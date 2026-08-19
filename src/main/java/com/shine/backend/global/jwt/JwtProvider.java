@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.UUID;
 
 /** 토큰 발급과 검증만 담당한다. 저장·폐기는 RefreshTokenService가 맡는다. */
 @Component
@@ -53,6 +54,9 @@ public class JwtProvider {
         return Jwts.builder()
                 .subject(String.valueOf(userId))
                 .claim(CLAIM_TYPE, type)
+                // iat/exp 는 초 단위라 같은 초에 발급하면 토큰이 동일해진다.
+                // 매번 다른 값이 나오도록 고유 id를 넣는다.
+                .id(UUID.randomUUID().toString())
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + validityMs))
                 .signWith(key)
