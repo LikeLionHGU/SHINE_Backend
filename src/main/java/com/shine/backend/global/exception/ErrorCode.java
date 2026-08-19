@@ -55,6 +55,7 @@ public enum ErrorCode {
     APPOINTMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "일정을 찾을 수 없습니다."),
     VISIT_NOT_FOUND(HttpStatus.NOT_FOUND, "일정을 찾을 수 없습니다."),
     VISIT_NOT_OWNED(HttpStatus.FORBIDDEN, "본인의 일정이 아닙니다."),
+    TEST_DATE_IN_FUTURE(HttpStatus.BAD_REQUEST, "검사일이 오늘 이후입니다. 날짜를 다시 확인해주세요."),
     INVALID_VISIT_DATE(HttpStatus.BAD_REQUEST, "방문 일시가 올바르지 않습니다."),
     QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "질문을 찾을 수 없습니다."),
     GUARDIAN_EMAIL_NOT_SET(HttpStatus.BAD_REQUEST, "보호자 이메일을 먼저 등록해주세요."),

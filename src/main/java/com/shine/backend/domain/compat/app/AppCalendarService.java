@@ -129,6 +129,13 @@ public class AppCalendarService {
      */
     @Transactional(readOnly = true)
     public AppDtos.CalendarMonthMarks getMonthMarks(Long userId, int year, int month) {
+        if (month < 1 || month > 12) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "month는 1~12 사이여야 합니다.");
+        }
+        if (year < 2000 || year > 2100) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "year가 올바르지 않습니다.");
+        }
+
         YearMonth ym = YearMonth.of(year, month);
         Map<Integer, String> marks = new HashMap<>();
         Map<Integer, String> labels = new HashMap<>();
@@ -259,9 +266,20 @@ public class AppCalendarService {
     }
 
     private LocalDateTime toDateTime(String date, String meridiem, int hour, int minute) {
-        int hour24 = "PM".equalsIgnoreCase(meridiem)
-                ? (hour % 12) + 12
-                : (hour % 12);
+        // 조용히 나머지만 취하면 오후 2시(hour 14)가 오전 2시로 저장된다.
+        // 잘못된 시각을 말없이 바꿔 저장하는 것보다 거절하는 편이 낫다.
+        if (hour < 1 || hour > 12) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "hour는 1~12 사이여야 합니다.");
+        }
+        if (minute < 0 || minute > 59) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "minute는 0~59 사이여야 합니다.");
+        }
+        boolean pm = "PM".equalsIgnoreCase(meridiem);
+        if (!pm && !"AM".equalsIgnoreCase(meridiem)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "meridiem은 AM 또는 PM이어야 합니다.");
+        }
+
+        int hour24 = pm ? (hour % 12) + 12 : (hour % 12);
         return parseShortDate(date).atTime(hour24, minute);
     }
 

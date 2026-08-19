@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -71,7 +72,7 @@ public class AppQueryService {
                 .map(s -> new AppDtos.RecordEntry(
                         String.valueOf(s.getId()),
                         s.getTestDate().format(SHORT),
-                        s.getPregnancyWeek() + "주차",
+                        weekLabel(s.getPregnancyWeek()),
                         summaryOf(s, counts.getOrDefault(s.getId(), Map.of()))))
                 .toList();
     }
@@ -129,14 +130,16 @@ public class AppQueryService {
         TestItemCatalog item = latest.getTestItem();
 
         // 같은 날 여러 번 올렸으면 마지막 값만 쓴다. 그래프에 점이 겹치면 읽기 어렵다.
-        LinkedHashMap<String, AppDtos.TrendPoint> byDate = new LinkedHashMap<>();
+        // 키를 연-월-일 전체로 둔다. 월·일만 쓰면 해가 바뀐 검사가 한 점으로 합쳐지고,
+        // 12월 다음에 1월이 오는 순서도 지킬 수 없다.
+        TreeMap<LocalDate, AppDtos.TrendPoint> byDate = new TreeMap<>();
         history.stream()
                 .filter(r -> r.getNumberValue() != null)
                 .filter(r -> r.getResultStatus() != ResultStatus.UNKNOWN)
                 .forEach(r -> byDate.put(
-                        r.getTestDate().format(MONTH_DAY),
+                        r.getTestDate(),
                         new AppDtos.TrendPoint(
-                                r.getTestDate().format(MONTH_DAY), r.getNumberValue().doubleValue())));
+                                r.getTestDate().format(SHORT), r.getNumberValue().doubleValue())));
         List<AppDtos.TrendPoint> points = List.copyOf(byDate.values());
 
         return new AppDtos.TrendIndicator(
@@ -178,8 +181,9 @@ public class AppQueryService {
 
         List<TestResult> numeric = history.stream()
                 .filter(r -> r.getNumberValue() != null)
+                .filter(r -> r.getResultStatus() != ResultStatus.UNKNOWN)
                 .collect(java.util.stream.Collectors.toMap(
-                        TestResult::getTestDate, r -> r, (a, b) -> b, LinkedHashMap::new))
+                        TestResult::getTestDate, r -> r, (a, b) -> b, TreeMap::new))
                 .values().stream().toList();
 
         if (numeric.size() < 2) {
@@ -209,6 +213,11 @@ public class AppQueryService {
                     .put((ResultStatus) row[1], (Long) row[2]);
         }
         return result;
+    }
+
+    /** 임신 시작 이전 검사지는 주차를 비워 보낸다. 음수를 화면에 띄울 수는 없다. */
+    private String weekLabel(int week) {
+        return week < 0 ? null : week + "주차";
     }
 
     private String statusLabel(ResultStatus status) {

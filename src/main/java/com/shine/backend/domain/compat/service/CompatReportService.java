@@ -68,20 +68,43 @@ public class CompatReportService {
         boolean confirmed = testDate != null;
         LocalDate effective = confirmed ? testDate : LocalDate.now();
 
-        TestSheet sheet = TestSheet.builder()
-                .user(user)
-                .testDate(effective)
-                .testDateConfirmed(confirmed)
-                .pregnancyWeek(user.getPregnancyWeek(effective))
-                .imageKeys(List.of())   // 이미지는 프론트가 기기에 두고 있다
-                .analysisStatus(AnalysisStatus.WAITING)
-                .piiMasked(true)
-                .build();
-        testSheetRepository.save(sheet);
+        // 검사는 미래에 받을 수 없다. 오늘 이후 날짜는 OCR 오독으로 본다.
+        if (effective.isAfter(LocalDate.now())) {
+            throw new BusinessException(ErrorCode.TEST_DATE_IN_FUTURE);
+        }
+
+        // 같은 날짜를 다시 올리면 덮어쓴다.
+        // 기록 탭이 날짜 타임라인이라 같은 날 두 줄이 뜨면 사용자가 구분할 수 없다.
+        TestSheet sheet = testSheetRepository
+                .findFirstByUserIdAndAnalysisStatusAndTestDateOrderByIdDesc(
+                        userId, AnalysisStatus.DONE, effective)
+                .orElse(null);
+
+        if (sheet == null) {
+            sheet = TestSheet.builder()
+                    .user(user)
+                    .testDate(effective)
+                    .testDateConfirmed(confirmed)
+                    .pregnancyWeek(user.getPregnancyWeek(effective))
+                    .imageKeys(List.of())   // 이미지는 프론트가 기기에 두고 있다
+                    .analysisStatus(AnalysisStatus.WAITING)
+                    .piiMasked(true)
+                    .build();
+            testSheetRepository.save(sheet);
+        } else {
+            testResultRepository.deleteAll(testResultRepository.findByTestSheetId(sheet.getId()));
+            questionRepository.deleteAll(
+                    questionRepository.findByTestSheetIdOrderByIdDesc(sheet.getId()));
+            testResultRepository.flush();
+            questionRepository.flush();
+        }
 
         // 기존 파서·매처·판정 엔진을 그대로 태운다
         List<AnalyzedRow> rows = analyzer.analyze(toOcrResult(request));
-        testResultRepository.saveAll(rows.stream().map(row -> toEntity(sheet, row)).toList());
+        // sheet 는 위에서 새로 만들거나 기존 것을 집어오므로 재대입된다.
+        // 람다가 참조하려면 바뀌지 않는 이름이 하나 필요하다.
+        final TestSheet target = sheet;
+        testResultRepository.saveAll(rows.stream().map(row -> toEntity(target, row)).toList());
 
         sheet.markDone(request.summary(), null, "frontend-openai", null);
         // 홈 화면과 검사지 화면에 다른 재료가 뜨지 않도록 프론트가 만든 것을 저장해둔다
@@ -96,7 +119,7 @@ public class CompatReportService {
                 sheet.getId(),
                 sheet.getTestDate().format(SHORT),
                 sheet.isTestDateConfirmed(),
-                sheet.getPregnancyWeek() + "주차",
+                weekLabel(sheet.getPregnancyWeek()),
                 toItems(rows, request.items()),
                 request.summary(),
                 request.questions(),
@@ -208,6 +231,15 @@ public class CompatReportService {
                         .includeInBriefing(true)
                         .build())
                 .toList());
+    }
+
+    /**
+     * 임신 시작 이전 검사지는 주차를 말할 수 없다.
+     * 임신 전 건강검진 결과를 올리는 경우가 실제로 있어서 거부하지는 않고,
+     * 주차만 비워 보낸다. "-335주차"가 화면에 뜨는 것보다 낫다.
+     */
+    private String weekLabel(int week) {
+        return week < 0 ? null : week + "주차";
     }
 
     /** "26.08.17" 과 "2026-08-17" 을 모두 받는다 */

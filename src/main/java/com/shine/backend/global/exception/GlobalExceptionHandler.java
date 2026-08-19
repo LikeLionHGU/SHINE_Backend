@@ -4,7 +4,10 @@ import com.shine.backend.global.response.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -20,18 +23,51 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Object>> handleBusiness(BusinessException e) {
         ErrorCode code = e.getErrorCode();
         log.warn("[{}] {}", code.name(), e.getMessage());
-        return ResponseEntity.status(code.getStatus()).body(ApiResponse.error(code));
+
+        // 상황을 설명하는 메시지가 붙어 있으면 그걸 보여준다.
+        // 기본 문구("입력값이 올바르지 않습니다")만으로는 무엇을 고쳐야 할지 알 수 없다.
+        String message = e.getMessage() == null || e.getMessage().isBlank()
+                ? code.getMessage() : e.getMessage();
+
+        return ResponseEntity.status(code.getStatus())
+                .body(new ApiResponse<>(false, code.name(), message, null));
     }
 
-    /** @Valid 검증 실패 — 어느 필드가 왜 틀렸는지 data에 담아 프론트가 인라인 표시할 수 있게 한다. */
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<Object>> handleValidation(MethodArgumentNotValidException e) {
+    /**
+     * @Valid 검증 실패 — 어느 필드가 왜 틀렸는지 data에 담는다.
+     * MethodArgumentNotValidException 은 BindException 의 하위라 함께 받는다.
+     */
+    @ExceptionHandler(BindException.class)
+    public ResponseEntity<ApiResponse<Object>> handleValidation(BindException e) {
         List<Map<String, String>> errors = e.getBindingResult().getFieldErrors().stream()
                 .map(fe -> Map.of(
-                        "field", fe.getField(),
+                        "field", fe.getField() == null ? "" : fe.getField(),
                         "reason", fe.getDefaultMessage() == null ? "" : fe.getDefaultMessage()))
                 .toList();
 
+        log.warn("검증 실패 {}", errors);
+        return invalid(errors);
+    }
+
+    /** 필수 쿼리 파라미터 누락. 핸들러가 없으면 500으로 샌다. */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiResponse<Object>> handleMissingParam(
+            MissingServletRequestParameterException e) {
+        return invalid(List.of(Map.of(
+                "field", e.getParameterName(),
+                "reason", "필수 항목입니다.")));
+    }
+
+    /** 숫자 자리에 글자가 오는 등 타입이 맞지 않는 경우. */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Object>> handleTypeMismatch(
+            MethodArgumentTypeMismatchException e) {
+        return invalid(List.of(Map.of(
+                "field", e.getName(),
+                "reason", "형식이 올바르지 않습니다.")));
+    }
+
+    private ResponseEntity<ApiResponse<Object>> invalid(List<Map<String, String>> errors) {
         ErrorCode code = ErrorCode.INVALID_INPUT;
         return ResponseEntity.status(code.getStatus())
                 .body(ApiResponse.error(code, Map.of("errors", errors)));
@@ -45,14 +81,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Object>> handleUnreadable(HttpMessageNotReadableException e) {
         log.warn("요청 본문 해석 실패: {}", e.getMessage());
-        ErrorCode code = ErrorCode.INVALID_INPUT;
-        return ResponseEntity.status(code.getStatus()).body(ApiResponse.error(code));
+        return invalid(List.of(Map.of(
+                "field", "body",
+                "reason", "요청 형식을 확인해주세요.")));
     }
 
     /** 예상 못 한 예외. 내부 메시지를 사용자에게 노출하지 않는다. */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Object>> handleUnexpected(Exception e) {
-        log.error("처리되지 않은 예외", e);
+        // 어떤 예외가 새는지 클래스 이름까지 남긴다. 이게 없으면 원인을 못 찾는다.
+        log.error("처리되지 않은 예외 [{}]", e.getClass().getName(), e);
         ErrorCode code = ErrorCode.INTERNAL_ERROR;
         return ResponseEntity.status(code.getStatus()).body(ApiResponse.error(code));
     }
