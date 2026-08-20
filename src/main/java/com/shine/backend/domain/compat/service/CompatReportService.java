@@ -8,7 +8,6 @@ import com.shine.backend.domain.question.entity.QuestionSource;
 import com.shine.backend.domain.question.entity.QuestionStatus;
 import com.shine.backend.domain.nutrition.AllowedFoods;
 import com.shine.backend.domain.question.repository.QuestionRepository;
-import com.shine.backend.domain.testitem.entity.ResultType;
 import com.shine.backend.domain.testitem.entity.TestItemCatalog;
 import com.shine.backend.domain.testsheet.analyzer.AnalyzedRow;
 import com.shine.backend.domain.testsheet.analyzer.TestSheetAnalyzer;
@@ -26,7 +25,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -35,12 +33,25 @@ import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
- * 프론트가 OpenAI Vision으로 읽어낸 검사지를 받아 저장한다.
+ * 프론트가 읽어낸 검사지를 받아 저장한다.
  *
- * 프론트가 보낸 status는 참고만 하고, 화면에 쓸 판정은 서버가 다시 계산한다.
- * 검사지에 인쇄된 참고치가 비임신 성인 기준인 경우가 많아 그대로 믿으면
- * 정상인 산모가 "주의"로 나오기 때문이다.
- *   혈색소 11.5 → 검사지 기준(12~16) 주의 / 임신 기준(11~15) 안심
+ * ── 판정 주체 (전달사항 4번) ──────────────────────────────────────────────
+ * 프론트에 학회 기준표를 lookup하는 판정 엔진(src/lib/labs)이 들어오면서 역할이 갈렸다.
+ *
+ *   엔진이 판정한 항목(engineStatus 있음) → 프론트 판정을 그대로 쓴다.
+ *       서버 판정에는 근거(출처·인용문)가 붙지 않고, 임신 주수별 기준 반영도
+ *       항목마다 들쭉날쭉하다. 화면은 이미 엔진 판정을 쓰고 있으므로 서버가 여기서
+ *       다시 덮어쓰면 저장된 값과 화면이 갈린다.
+ *   엔진이 모르는 항목                    → 서버 판정을 쓴다(기존 그대로).
+ *
+ * 어느 쪽을 쓰든 화면에 보이는 것과 DB에 남는 것은 항상 같은 값이어야 한다.
+ * 그래야 기록 탭에서 지난 검사지를 열었을 때 상태가 바뀌지 않는다.
+ *
+ * ── 응답 순서 (전달사항 3번) ─────────────────────────────────────────────
+ * 프론트는 응답 items를 배열 인덱스로 요청 items와 짝짓는다. 개수가 하나라도 다르면
+ * 응답을 통째로 버리고, 순서가 밀리면 다른 항목의 이름이 붙는다. 그래서 이 서비스는
+ * 정렬·중복 제거·미지원 항목 제외를 일절 하지 않고 **받은 순서·개수 그대로** 돌려준다.
+ * (인덱스 대신 쓸 수 있도록 응답 항목마다 resultId 를 함께 내려준다.)
  */
 @Slf4j
 @Service
@@ -57,7 +68,7 @@ public class CompatReportService {
     private final ValueSplitter valueSplitter;
     private final VerdictGenerator verdictGenerator;
     private final AllowedFoods allowedFoods;
-    private final ObjectMapper objectMapper;
+    private final EngineMetaCodec engineMetaCodec;
 
     @Transactional
     public ReportResponse save(Long userId, ReportUploadRequest request) {
@@ -99,61 +110,108 @@ public class CompatReportService {
             questionRepository.flush();
         }
 
-        // 기존 파서·매처·판정 엔진을 그대로 태운다
-        List<AnalyzedRow> rows = analyzer.analyze(toOcrResult(request));
-        // sheet 는 위에서 새로 만들거나 기존 것을 집어오므로 재대입된다.
-        // 람다가 참조하려면 바뀌지 않는 이름이 하나 필요하다.
+        // 요청 순서를 여기서 고정한다. 아래 어디서도 이 리스트를 다시 정렬하지 않는다.
+        List<ParsedTestItemDto> items = request.items();
+
+        // 기존 파서·매처·판정 엔진을 그대로 태운다. rows 는 items 와 1:1 이다.
+        List<AnalyzedRow> rows = analyzer.analyze(toOcrResult(items));
+
         final TestSheet target = sheet;
-        testResultRepository.saveAll(rows.stream().map(row -> toEntity(target, row)).toList());
+        // 저장된 엔티티를 요청 인덱스로 되찾을 수 있게 자리를 맞춰 담는다.
+        // (이름이 비어 있는 항목은 저장하지 않으므로 그 자리는 null 로 남는다)
+        TestResult[] saved = new TestResult[items.size()];
+        List<TestResult> toPersist = new ArrayList<>();
+        List<Integer> persistedIndexes = new ArrayList<>();
+
+        for (int i = 0; i < items.size(); i++) {
+            ParsedTestItemDto origin = items.get(i);
+            if (origin == null || isBlank(origin.name())) continue;
+
+            AnalyzedRow row = resolveRow(rows.get(i), origin);
+            toPersist.add(toEntity(target, row, origin));
+            persistedIndexes.add(i);
+        }
+
+        List<TestResult> persisted = testResultRepository.saveAll(toPersist);
+        for (int i = 0; i < persisted.size(); i++) {
+            saved[persistedIndexes.get(i)] = persisted.get(i);
+        }
 
         sheet.markDone(request.summary(), null, "frontend-openai", null);
         // 홈 화면과 검사지 화면에 다른 재료가 뜨지 않도록 프론트가 만든 것을 저장해둔다
         List<ReportUploadRequest.FoodDto> foods = filterFoods(request.foods());
-        sheet.applyNutritionFoods(toJson(foods));
+        sheet.applyNutritionFoods(engineMetaCodec.toJson(foods));
         saveQuestions(user, sheet, request.questions());
 
         long matched = rows.stream().filter(AnalyzedRow::isMatched).count();
-        log.info("프론트 검사지 수신 sheetId={} 항목={} 매칭={}", sheet.getId(), rows.size(), matched);
+        long engineOwned = items.stream().filter(it -> it != null && it.hasEngineVerdict()).count();
+        log.info("프론트 검사지 수신 sheetId={} 항목={} 매칭={} 엔진판정={}",
+                sheet.getId(), items.size(), matched, engineOwned);
 
         return new ReportResponse(
                 sheet.getId(),
                 sheet.getTestDate().format(SHORT),
                 sheet.isTestDateConfirmed(),
                 weekLabel(sheet.getPregnancyWeek()),
-                toItems(rows, request.items()),
+                toItems(items, rows, saved),
                 request.summary(),
                 request.questions(),
                 foods);
     }
 
+    // ---------- 판정 ----------
+
+    /**
+     * 저장할 판정을 정한다.
+     * 엔진이 판정한 항목은 엔진 값을, 아니면 서버가 계산한 값을 쓴다(전달사항 4번).
+     */
+    private AnalyzedRow resolveRow(AnalyzedRow row, ParsedTestItemDto origin) {
+        if (!origin.hasEngineVerdict()) return row;
+
+        ResultStatus fromEngine = ResultStatus.fromEngineStatus(origin.engineStatus());
+        if (fromEngine == null) {
+            log.warn("모르는 engineStatus '{}' — 서버 판정을 쓴다", origin.engineStatus());
+            return row;
+        }
+        return row.withResultStatus(fromEngine);
+    }
+
     // ---------- 변환 ----------
 
-    private OcrResult toOcrResult(ReportUploadRequest request) {
-        List<OcrRow> rows = new ArrayList<>();
+    /**
+     * 요청 items 를 그대로 OCR 행으로 옮긴다.
+     *
+     * ⚠️ 여기서 한 줄이라도 건너뛰면 뒤 항목의 인덱스가 앞으로 당겨져서, 응답에 다른
+     *    항목의 이름이 붙는다. 이름이 비어 있어 저장할 수 없는 행도 자리는 남긴다.
+     */
+    private OcrResult toOcrResult(List<ParsedTestItemDto> items) {
+        List<OcrRow> rows = new ArrayList<>(items.size());
 
-        for (ParsedTestItemDto item : request.items()) {
-            if (item.name() == null || item.name().isBlank()) continue;
-
+        for (ParsedTestItemDto item : items) {
+            if (item == null) {
+                rows.add(OcrRow.of(null, "", null, null, null, null));
+                continue;
+            }
             var split = valueSplitter.split(item.value());
-            rows.add(OcrRow.of(null, item.name(), split.value(), split.unit(),
-                    split.referenceRange(), null));
+            rows.add(OcrRow.of(null, item.name() == null ? "" : item.name(),
+                    split.value(), split.unit(), split.referenceRange(), null));
         }
         return new OcrResult(null, null, rows, null, "frontend-openai");
     }
 
-    private TestResult toEntity(TestSheet sheet, AnalyzedRow row) {
+    private TestResult toEntity(TestSheet sheet, AnalyzedRow row, ParsedTestItemDto origin) {
         return TestResult.builder()
                 .testSheet(sheet)
                 .testItem(row.item())
                 .user(sheet.getUser())
                 .testDate(sheet.getTestDate())
                 .pregnancyWeek(sheet.getPregnancyWeek())
-                .ocrLabel(row.ocrLabel())
+                .ocrLabel(trimTo(row.ocrLabel(), 100))
                 .ocrCategory(row.ocrCategory())
-                .rawValue(row.rawValue() == null ? "" : row.rawValue())
+                .rawValue(row.rawValue() == null ? "" : trimTo(row.rawValue(), 100))
                 .resultType(row.resultType())
                 .numberValue(row.numberValue())
-                .textValue(row.textValue())
+                .textValue(trimTo(row.textValue(), 100))
                 .unit(row.unit())
                 .unitRaw(row.unitRaw())
                 .sheetNormalMin(row.sheetNormalMin())
@@ -164,27 +222,57 @@ public class CompatReportService {
                 .sheetVerdict(row.sheetVerdict())
                 .verdictMismatch(row.verdictMismatch())
                 // 저장해둬야 나중에 /test-sheets/{id} 로 다시 볼 때도 같은 문장이 나온다
-                .briefForMom(verdictGenerator.generate(row))
+                .briefForMom(trimTo(briefFor(row, origin), 500))
+                .engineStatus(trimTo(origin.engineStatus(), 20))
+                .engineMeta(engineMetaCodec.toJson(EngineMetaCodec.EngineMeta.from(origin)))
                 .editedByUser(false)
                 .build();
     }
 
-    /** 서버 판정으로 status를 덮어쓰고, 설명 문장도 템플릿으로 다시 만든다 */
-    private List<ParsedTestItemDto> toItems(List<AnalyzedRow> rows, List<ParsedTestItemDto> original) {
-        List<ParsedTestItemDto> result = new ArrayList<>();
+    /** 화면에 뜬 문장을 그대로 남긴다. 엔진 판정이면 엔진 문장이 곧 화면 문장이다. */
+    private String briefFor(AnalyzedRow row, ParsedTestItemDto origin) {
+        if (origin.hasEngineVerdict() && !isBlank(origin.verdict())) {
+            return origin.verdict();
+        }
+        return verdictGenerator.generate(row);
+    }
 
-        for (int i = 0; i < rows.size() && i < original.size(); i++) {
+    /**
+     * 응답 items 를 만든다. 요청과 **같은 개수·같은 순서**다.
+     * 정렬하거나 걸러내면 프론트에서 항목 이름이 뒤섞인다(전달사항 3번).
+     */
+    private List<ParsedTestItemDto> toItems(List<ParsedTestItemDto> items,
+                                            List<AnalyzedRow> rows,
+                                            TestResult[] saved) {
+        List<ParsedTestItemDto> result = new ArrayList<>(items.size());
+
+        for (int i = 0; i < items.size(); i++) {
+            ParsedTestItemDto origin = items.get(i);
+            if (origin == null) {
+                result.add(null);   // 자리를 비워서라도 개수를 지킨다
+                continue;
+            }
+
             AnalyzedRow row = rows.get(i);
-            ParsedTestItemDto origin = original.get(i);
             TestItemCatalog item = row.item();
+            String catalogName = item == null ? null : item.getNameKo();
+            String itemCode = item == null ? null : item.getCode();
+            Long resultId = saved[i] == null ? null : saved[i].getId();
 
-            result.add(new ParsedTestItemDto(
-                    item != null ? item.getNameKo() : origin.name(),
-                    origin.value(),
-                    statusLabel(row.resultStatus(), origin.status()),
+            if (origin.hasEngineVerdict()) {
+                // 판정·설명·근거는 엔진 것을 유지하고 대표명만 빌려준다
+                result.add(origin.withCatalogName(catalogName, resultId, itemCode));
+                continue;
+            }
+
+            result.add(origin.withServerVerdict(
+                    catalogName,
+                    row.resultStatus().label(),
                     item != null && item.getBriefForMom() != null
                             ? item.getBriefForMom() : origin.definition(),
-                    verdict(row, item, origin)));
+                    verdict(row, origin),
+                    resultId,
+                    itemCode));
         }
         return result;
     }
@@ -192,25 +280,11 @@ public class CompatReportService {
     /**
      * 판정을 못 했으면 못 했다고 말한다.
      *
-     * 프론트가 보낸 값을 그대로 돌려주면 저장된 값과 어긋나서,
-     * 업로드 직후엔 "안심"이던 항목이 기록 탭에서는 미분류로 바뀐다.
+     * 프론트가 보낸 문장을 그대로 돌려주면 저장된 값과 어긋나서,
+     * 업로드 직후엔 "안심"이던 항목이 기록 탭에서는 확인 필요로 바뀐다.
      * 사용자 눈에는 데이터가 망가진 것으로 보인다.
      */
-    private String statusLabel(ResultStatus status, String fallback) {
-        return switch (status) {
-            case NORMAL -> "안심";
-            case CAUTION -> "주의";
-            case DANGER -> "위험";
-            case UNKNOWN -> null;
-        };
-    }
-
-    /**
-     * 첫 문장은 고정 템플릿으로 만든다.
-     * AI가 만든 문장을 그대로 쓰면 서버 판정과 어긋날 수 있다.
-     */
-    private String verdict(AnalyzedRow row, TestItemCatalog item, ParsedTestItemDto origin) {
-        // 판정을 못 한 항목에 AI가 쓴 "정상입니다"를 붙이면 저장된 값과 어긋난다
+    private String verdict(AnalyzedRow row, ParsedTestItemDto origin) {
         if (row.resultStatus() == ResultStatus.UNKNOWN) return null;
         String generated = verdictGenerator.generate(row);
         return generated != null ? generated : origin.verdict();
@@ -224,7 +298,7 @@ public class CompatReportService {
                 .map(q -> Question.builder()
                         .user(user)
                         .testSheet(sheet)
-                        .content(q.length() > 500 ? q.substring(0, 500) : q)
+                        .content(trimTo(q, 500))
                         // AI가 "물어볼 질문"을 추천한 것이지 답변이 아니다
                         .createdBy(QuestionSource.AI)
                         .questionStatus(QuestionStatus.PENDING)
@@ -257,16 +331,6 @@ public class CompatReportService {
         }
     }
 
-    private String toJson(List<ReportUploadRequest.FoodDto> foods) {
-        if (foods == null || foods.isEmpty()) return null;
-        try {
-            return objectMapper.writeValueAsString(foods);
-        } catch (Exception e) {
-            log.warn("추천 음식 직렬화 실패", e);
-            return null;
-        }
-    }
-
     /**
      * 목록에 없는 음식을 걸러낸다.
      * 프롬프트로 제약해도 AI가 가끔 벗어나고, 이미지가 없는 재료가 화면에 뜨면 깨진다.
@@ -286,5 +350,15 @@ public class CompatReportService {
                     new ReportUploadRequest.FoodDto(canonical, food.reason()));
         }
         return List.copyOf(picked.values());
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
+    }
+
+    /** DB 컬럼 길이를 넘기면 저장 자체가 실패해 검사지 한 장이 통째로 날아간다. */
+    private static String trimTo(String s, int max) {
+        if (s == null) return null;
+        return s.length() <= max ? s : s.substring(0, max);
     }
 }

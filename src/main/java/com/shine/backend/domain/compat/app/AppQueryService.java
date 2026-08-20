@@ -220,13 +220,13 @@ public class AppQueryService {
         return week < 0 ? null : week + "주차";
     }
 
+    /**
+     * UNKNOWN을 "안심"으로 내려보내고 있었다.
+     * 판정하지 못한 항목이 화면에서는 초록색 정상으로 보인다는 뜻이라,
+     * 이 앱에서 가장 위험한 실패다. 이제 "확인 필요"로 나간다(전달사항 1번).
+     */
     private String statusLabel(ResultStatus status) {
-        return switch (status) {
-            case NORMAL -> "안심";
-            case CAUTION -> "주의";
-            case DANGER -> "위험";
-            case UNKNOWN -> "안심";
-        };
+        return status.label();
     }
 
     private int severity(ResultStatus status) {

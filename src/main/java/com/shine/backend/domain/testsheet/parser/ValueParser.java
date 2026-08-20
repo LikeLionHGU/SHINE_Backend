@@ -9,24 +9,28 @@ import java.util.regex.Pattern;
 /**
  * 검사지 결과값 문자열을 구조화한다.
  *
- * 실제 산전검사지에서 확인된 표기 5가지를 모두 처리한다.
- *   ① 순수 정량   "18", "12.2", "213"
- *   ② 순수 정성   "양성", "음성", "정상", "Non Reactive"
+ *   ① 순수 정량   "18", "12.2"
+ *   ② 순수 정성   "양성", "Non Reactive"
  *   ③ 정성+정량   "음성(0.07)"        ← 괄호 안이 숫자
  *   ④ 기호형      "음성(-)", "RH(+)"  ← 괄호 안이 기호
  *   ⑤ 혈액형      "A"
+ *   ⑥ 정성+한계치 "양성(>500)"        ← 괄호 안이 부등호 + 숫자
  *
- * ③과 ④를 가르는 기준은 "괄호 안이 숫자인가"다.
- * 숫자면 분해하고, 아니면 통째로 텍스트로 둔다 — 정규화는 다음 단계가 맡는다.
+ * ⑥은 측정기의 상한/하한을 넘겨 정확한 값이 없는 경우다. 예전에는 못 읽어서
+ * "양성(>500)" 전체가 정성 사전에 없는 표기가 되고 판정이 막혔다(#8-3).
+ * ">500"은 측정치가 아니라 "500을 넘었다"는 말이라 숫자로 저장하지 않는다.
  */
 @Component
 public class ValueParser {
 
-    /** "음성(0.07)" — 괄호 안이 숫자인 경우만 매칭된다 */
+    /** "음성(0.07)" — 괄호 안이 숫자인 경우만 */
     private static final Pattern MIXED = Pattern.compile(
             "^(?<text>[^()]+?)\\s*\\(\\s*(?<num>-?\\d+(?:\\.\\d+)?)\\s*\\)$");
 
-    /** "18", "12.2", "-0.5" */
+    /** "양성(>500)", "음성(<0.1)", "양성(500 이상)" */
+    private static final Pattern LIMITED = Pattern.compile(
+            "^(?<text>[^()]+?)\\s*\\(\\s*(?:[<>≤≥]\\s*)?-?\\d+(?:\\.\\d+)?\\s*(?:이상|이하|미만|초과)?\\s*\\)$");
+
     private static final Pattern NUMBER = Pattern.compile("^-?\\d+(?:\\.\\d+)?$");
 
     public ParsedValue parse(String raw) {
@@ -48,6 +52,15 @@ public class ValueParser {
         String numeric = value.replace(",", "");
         if (NUMBER.matcher(numeric).matches()) {
             return ParsedValue.number(new BigDecimal(numeric), raw);
+        }
+
+        // ⑥ 정성 + 한계치. 숫자는 버리고 정성 부분만 판정에 넘긴다.
+        Matcher limited = LIMITED.matcher(value);
+        if (limited.matches()) {
+            String text = limited.group("text").trim();
+            if (!text.isEmpty()) {
+                return ParsedValue.text(text, raw);
+            }
         }
 
         // ②④⑤ 나머지는 전부 텍스트. 표준값 변환은 정규화 단계에서 한다.
