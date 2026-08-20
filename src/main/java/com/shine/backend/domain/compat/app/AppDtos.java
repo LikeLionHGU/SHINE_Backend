@@ -1,5 +1,10 @@
 package com.shine.backend.domain.compat.app;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+
 import java.util.List;
 import java.util.Map;
 
@@ -21,6 +26,33 @@ public final class AppDtos {
             String phone,
             String email,
             String guardianEmail,
+            String extraEmail
+    ) {}
+
+    /**
+     * 개인정보 수정 요청. 부분 수정이라 보낸 칸만 바뀐다.
+     * 빈 문자열은 "지운다"는 뜻이고, 아예 안 보내면 그대로 둔다.
+     *
+     * 프론트는 추가 이메일을 extraEmail 로, 서버는 additionalEmail 로 부른다.
+     * 어느 이름으로 보내든 받도록 별칭을 걸어둔다 — 이름 하나 때문에 저장이
+     * 조용히 실패하는 것이 가장 찾기 어려운 버그다.
+     */
+    public record UserProfileUpdate(
+            @Size(min = 2, max = 20, message = "이름은 2~20자로 입력해주세요.")
+            String name,
+
+            @JsonAlias("phoneNumber")
+            @Pattern(regexp = "^[+0-9][0-9 -]{7,19}$", message = "휴대폰 번호 형식이 올바르지 않아요.")
+            String phone,
+
+            @Email(message = "이메일 형식이 올바르지 않아요.")
+            String email,
+
+            @Email(message = "보호자 이메일 형식이 올바르지 않아요.")
+            String guardianEmail,
+
+            @JsonAlias("additionalEmail")
+            @Email(message = "이메일 형식이 올바르지 않아요.")
             String extraEmail
     ) {}
 

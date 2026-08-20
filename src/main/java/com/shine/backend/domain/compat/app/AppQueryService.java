@@ -8,8 +8,10 @@ import com.shine.backend.domain.testsheet.entity.TestResult;
 import com.shine.backend.domain.testsheet.entity.TestSheet;
 import com.shine.backend.domain.testsheet.repository.TestResultRepository;
 import com.shine.backend.domain.testsheet.repository.TestSheetRepository;
+import com.shine.backend.domain.user.dto.UserUpdateRequest;
 import com.shine.backend.domain.user.entity.User;
 import com.shine.backend.domain.user.repository.UserRepository;
+import com.shine.backend.domain.user.service.UserService;
 import com.shine.backend.global.exception.BusinessException;
 import com.shine.backend.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +35,7 @@ public class AppQueryService {
     private static final int RECORD_SIZE = 50;
 
     private final UserRepository userRepository;
+    private final UserService userService;
     private final TestSheetRepository testSheetRepository;
     private final TestResultRepository testResultRepository;
 
@@ -50,6 +53,26 @@ public class AppQueryService {
                 user.getEmail(),
                 user.getGuardianEmail(),
                 user.getAdditionalEmail());
+    }
+
+    /**
+     * 개인정보 수정 — PATCH /api/v1/app/me
+     *
+     * PATCH /users/me 와 같은 일을 하되 응답을 GET /app/me 와 같은 모양으로 돌려준다.
+     * 지금 프론트는 PATCH 응답 모양이 달라서 저장 후 /app/me 를 한 번 더 부르는데,
+     * 이걸 쓰면 왕복이 한 번 줄어든다(전달사항 5번).
+     */
+    @Transactional
+    public AppDtos.UserProfile updateProfile(Long userId, AppDtos.UserProfileUpdate request) {
+        userService.update(userId, new UserUpdateRequest(
+                request.name(),
+                null,
+                request.phone(),
+                request.email(),
+                request.guardianEmail(),
+                request.extraEmail()));
+
+        return getProfile(userId);
     }
 
     // ---------- 기록 탭 ----------

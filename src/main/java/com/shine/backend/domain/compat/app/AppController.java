@@ -3,6 +3,7 @@ package com.shine.backend.domain.compat.app;
 import com.shine.backend.global.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -26,6 +27,16 @@ public class AppController {
     @GetMapping("/me")
     public ApiResponse<AppDtos.UserProfile> getProfile(@AuthenticationPrincipal Long userId) {
         return ApiResponse.success(appQueryService.getProfile(userId));
+    }
+
+    @Operation(summary = "개인정보 수정",
+            description = "PATCH /users/me 와 같은 일을 하되 응답이 GET /app/me 와 같은 모양이라 "
+                    + "저장 후 프로필을 다시 조회할 필요가 없다. 보낸 칸만 바뀌고, 빈 문자열은 '지운다'는 뜻이다.")
+    @PatchMapping("/me")
+    public ApiResponse<AppDtos.UserProfile> updateProfile(
+            @AuthenticationPrincipal Long userId,
+            @Valid @RequestBody AppDtos.UserProfileUpdate request) {
+        return ApiResponse.success(appQueryService.updateProfile(userId, request), "저장되었습니다.");
     }
 
     @Operation(summary = "기록 타임라인", description = "report.ts DEMO_RECORDS 대체")

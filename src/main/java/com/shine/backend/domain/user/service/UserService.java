@@ -24,9 +24,20 @@ public class UserService {
         return UserProfileResponse.from(find(userId), LocalDate.now());
     }
 
+    /**
+     * 부분 수정. 보낸 칸만 바뀐다.
+     *
+     * 빈 문자열은 "지운다"는 뜻인데, 지울 수 있는 칸은 보호자 이메일과 추가 이메일뿐이다.
+     * 이름·연락처·본인 이메일은 NOT NULL 이라 비울 수 없으므로 거절한다.
+     * 빈 값을 조용히 무시하면 사용자는 지워진 줄 안다.
+     */
     @Transactional
     public UserProfileResponse update(Long userId, UserUpdateRequest request) {
         User user = find(userId);
+
+        rejectBlank(request.name(), "이름은 비울 수 없어요.");
+        rejectBlank(request.phoneNumber(), "휴대폰 번호는 비울 수 없어요.");
+        rejectBlank(request.email(), "이메일은 비울 수 없어요.");
 
         if (request.email() != null && !request.email().equals(user.getEmail())
                 && userRepository.existsByEmail(request.email())) {
@@ -37,6 +48,13 @@ public class UserService {
         user.updateEmails(request.guardianEmail(), request.additionalEmail());
 
         return UserProfileResponse.from(user, LocalDate.now());
+    }
+
+    /** 보낸 적 없으면(null) 통과, 보냈는데 비었으면 거절 */
+    private void rejectBlank(String value, String message) {
+        if (value != null && value.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, message);
+        }
     }
 
     @Transactional
