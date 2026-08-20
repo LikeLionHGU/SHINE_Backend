@@ -33,6 +33,15 @@ jwt:
   access-token-validity-ms: ${JWT_ACCESS_TTL:1800000}
   refresh-token-validity-ms: 1209600000
 
+openai:
+  api-key: ${OPENAI_API_KEY}
+  base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+  allowed-models: gpt-4o,gpt-4o-mini
+  max-tokens-limit: 8192
+  daily-limit-per-user: ${OPENAI_DAILY_LIMIT:60}
+  timeout-seconds: 120
+  max-request-bytes: 12582912
+
 app:
   storage:
     path: ${STORAGE_PATH:/app/uploads}

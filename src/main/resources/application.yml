@@ -48,6 +48,19 @@ springdoc:
     tags-sorter: alpha
     operations-sorter: method
 
+# 검사지 OCR·요약 생성을 서버가 대신 호출한다(전달사항 7번).
+# 키는 절대 앱 번들에 넣지 않는다. 여기 비어 있으면 /api/v1/ai/* 는 503을 낸다.
+openai:
+  api-key: ${OPENAI_API_KEY:}
+  base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+  # OCR은 gpt-4o. mini는 수치를 잘못 읽거나 지어낸다.
+  allowed-models: gpt-4o,gpt-4o-mini
+  max-tokens-limit: 8192
+  # 검사지 한 장에 OCR 1~2회 + 요약 1회. 한 장당 약 $0.02.
+  daily-limit-per-user: ${OPENAI_DAILY_LIMIT:60}
+  timeout-seconds: 120
+  max-request-bytes: 12582912
+
 app:
   storage:
     # 로컬은 프로젝트 아래, 서버는 환경변수로 /var/shine/uploads 등을 지정한다

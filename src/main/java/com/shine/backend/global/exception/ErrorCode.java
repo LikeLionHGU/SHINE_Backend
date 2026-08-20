@@ -60,7 +60,13 @@ public enum ErrorCode {
     QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "질문을 찾을 수 없습니다."),
     GUARDIAN_EMAIL_NOT_SET(HttpStatus.BAD_REQUEST, "보호자 이메일을 먼저 등록해주세요."),
     SHARE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "오늘은 더 이상 공유할 수 없어요. 내일 다시 시도해주세요."),
-    EMAIL_SEND_FAILED(HttpStatus.BAD_GATEWAY, "메일 전송에 실패했습니다.");
+    EMAIL_SEND_FAILED(HttpStatus.BAD_GATEWAY, "메일 전송에 실패했습니다."),
+
+    // ---------- AI 프록시 ----------
+    AI_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "검사지 분석 기능을 준비 중이에요. 잠시 후 다시 시도해주세요."),
+    AI_MODEL_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "지원하지 않는 모델입니다."),
+    AI_QUOTA_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "오늘은 검사지를 더 분석할 수 없어요. 내일 다시 시도해주세요."),
+    AI_REQUEST_FAILED(HttpStatus.BAD_GATEWAY, "검사지를 읽는 데 실패했어요. 잠시 후 다시 시도해주세요.");
 
     private final HttpStatus status;
     private final String message;
