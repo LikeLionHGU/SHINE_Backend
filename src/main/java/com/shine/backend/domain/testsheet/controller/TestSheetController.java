@@ -19,6 +19,17 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 검사지 업로드는 @RequestPart 가 아니라 @RequestParam 으로 받는다.
+ *
+ * @RequestPart 는 파트의 Content-Type 을 보고 메시지 컨버터를 태우려 한다.
+ * React Native 의 FormData 는 { uri, name, type } 객체를 파일로 보내면서
+ * 파트 헤더를 브라우저와 다르게 실어 보내는데, 그러면 Spring 이 파트를 아예
+ * 못 찾고 MissingServletRequestPartException 을 던진다.
+ * @RequestParam 은 파트를 MultipartFile 로 그대로 꺼내와서 이 문제가 없다.
+ *
+ * 되돌리지 말 것 — 앱에서 사진이 안 올라간다.
+ */
 @Tag(name = "TestSheets", description = "검사지 업로드 · 분석 · 조회")
 @RestController
 @RequestMapping("/api/v1/test-sheets")
@@ -32,7 +43,7 @@ public class TestSheetController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<TestSheetUploadResponse>> upload(
             @AuthenticationPrincipal Long userId,
-            @RequestPart("files") List<MultipartFile> files,
+            @RequestParam("files") List<MultipartFile> files,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate testDate,
             @RequestParam(required = false) String hospitalName) {
@@ -57,7 +68,7 @@ public class TestSheetController {
     public ApiResponse<TestSheetDetailResponse> attachImages(
             @AuthenticationPrincipal Long userId,
             @PathVariable Long testSheetId,
-            @RequestPart("files") List<MultipartFile> files) {
+            @RequestParam("files") List<MultipartFile> files) {
         return ApiResponse.success(
                 testSheetService.attachImages(userId, testSheetId, files),
                 "검사지 사진이 저장되었습니다.");
