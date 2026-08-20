@@ -42,6 +42,27 @@ public class TestSheetController {
                 .body(ApiResponse.success(response, "분석을 시작했습니다."));
     }
 
+    @Operation(summary = "검사지에 원본 사진 붙이기",
+            description = """
+                    이미 저장된 검사지에 사진만 추가한다. 필드명은 POST /test-sheets 와 같은 files.
+
+                    프론트가 OCR을 직접 하는 경로(POST /reports)에서는 판정만 먼저 올라와서
+                    검사지 원본이 비어 있다. 이 API로 사진을 붙이면 기록 탭·진료 상세에서
+                    원본을 볼 수 있다.
+
+                    분석은 다시 돌지 않는다. 이미 나온 판정과 근거를 그대로 둔다.
+                    다시 올리면 기존 사진을 갈아끼운다. 최대 5장.
+                    """)
+    @PostMapping(value = "/{testSheetId}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<TestSheetDetailResponse> attachImages(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long testSheetId,
+            @RequestPart("files") List<MultipartFile> files) {
+        return ApiResponse.success(
+                testSheetService.attachImages(userId, testSheetId, files),
+                "검사지 사진이 저장되었습니다.");
+    }
+
     @Operation(summary = "분석 상태 폴링",
             description = "testDateConfirmRequired가 true면 검사일을 사용자에게 확인받아야 한다.")
     @GetMapping("/{testSheetId}/status")

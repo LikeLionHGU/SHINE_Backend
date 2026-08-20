@@ -84,6 +84,48 @@ public class TestSheetService {
         return TestSheetUploadResponse.of(sheet.getId(), sheet.getAnalysisStatus());
     }
 
+    /**
+     * 이미 저장된 검사지에 원본 사진만 붙인다.
+     *
+     * 프론트가 OCR을 직접 하는 경로(POST /reports)에서는 판정만 먼저 올라오고
+     * image_keys 가 빈 채로 남는다. 그래서 기록 탭·진료 상세에서 검사지 원본을
+     * 볼 수 없었다. 사진을 나중에 붙여 그 연결을 만든다.
+     *
+     * ⚠️ 분석 이벤트를 쏘지 않는다. 이 검사지는 이미 판정이 끝나 있고, 여기서
+     *    서버 OCR을 다시 돌리면 프론트 판정 엔진이 붙여놓은 근거·출처가
+     *    통째로 덮인다. 사진만 저장하고 판정은 건드리지 않는다.
+     *
+     * 다시 올리면 기존 사진을 지우고 갈아끼운다. 같은 날짜 검사지를 다시 올리면
+     * POST /reports 도 덮어쓰므로 그쪽과 동작을 맞춘다.
+     */
+    @Transactional
+    public TestSheetDetailResponse attachImages(Long userId, Long testSheetId,
+                                                List<MultipartFile> files) {
+        if (files == null || files.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT, "검사지 이미지를 올려주세요.");
+        }
+        if (files.size() > MAX_FILES) {
+            throw new BusinessException(ErrorCode.FILE_COUNT_EXCEEDED);
+        }
+
+        TestSheet sheet = findOwned(userId, testSheetId);
+
+        List<String> oldKeys = sheet.getImageKeys();
+        List<String> newKeys = fileStorage.storeAll(files, userId);
+        sheet.replaceImageKeys(newKeys);
+
+        // 새 사진을 저장한 뒤에 지운다. 먼저 지웠다가 저장이 실패하면 둘 다 잃는다.
+        if (oldKeys != null) {
+            oldKeys.forEach(fileStorage::delete);
+        }
+
+        return TestSheetDetailResponse.of(sheet,
+                testResultRepository.findBySheetWithItem(testSheetId),
+                foodsOf(sheet),
+                questionsOf(testSheetId),
+                r -> engineMetaCodec.read(r.getEngineMeta()));
+    }
+
     @Transactional(readOnly = true)
     public AnalysisStatusResponse getStatus(Long userId, Long testSheetId) {
         return AnalysisStatusResponse.from(findOwned(userId, testSheetId));

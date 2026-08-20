@@ -124,6 +124,17 @@ public class TestSheet extends BaseTimeEntity {
         this.failureReason = failureReason;
     }
 
+    /**
+     * 검사지 사진을 나중에 붙인다.
+     *
+     * 프론트가 OCR을 직접 하는 경로(POST /reports)에서는 사진 없이 판정만 먼저 올라온다.
+     * 그래서 image_keys 가 빈 채로 저장되고, 기록 탭에서 원본을 못 본다.
+     * 이 메서드로 사진만 나중에 채운다. 판정은 건드리지 않는다.
+     */
+    public void replaceImageKeys(List<String> imageKeys) {
+        this.imageKeys = imageKeys == null ? List.of() : imageKeys;
+    }
+
     public void saveOcrRaw(String ocrRawJson, String ocrEngine, boolean piiMasked) {
         this.ocrRawJson = ocrRawJson;
         this.ocrEngine = ocrEngine;
