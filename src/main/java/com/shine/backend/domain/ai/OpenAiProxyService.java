@@ -41,10 +41,13 @@ public class OpenAiProxyService {
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
 
+    /**
+     * RestClient.Builder 는 자동 설정 빈이 아니라서 주입받을 수 없다.
+     * (RestTemplateBuilder 와 다르다.) 여기서 직접 만든다.
+     */
     public OpenAiProxyService(OpenAiProperties properties,
                               StringRedisTemplate redis,
-                              ObjectMapper objectMapper,
-                              RestClient.Builder restClientBuilder) {
+                              ObjectMapper objectMapper) {
         this.properties = properties;
         this.redis = redis;
         this.objectMapper = objectMapper;
@@ -54,7 +57,7 @@ public class OpenAiProxyService {
         factory.setConnectTimeout(Duration.ofSeconds(10));
         factory.setReadTimeout(Duration.ofSeconds(properties.timeoutSeconds()));
 
-        this.restClient = restClientBuilder
+        this.restClient = RestClient.builder()
                 .baseUrl(properties.baseUrl())
                 .requestFactory(factory)
                 .build();
