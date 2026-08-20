@@ -1,5 +1,6 @@
 package com.shine.backend.domain.testsheet.dto;
 
+import com.shine.backend.domain.compat.service.EngineMetaCodec;
 import com.shine.backend.domain.testsheet.entity.AnalysisStatus;
 import com.shine.backend.domain.testsheet.entity.ResultStatus;
 import com.shine.backend.domain.testsheet.entity.TestResult;
@@ -8,6 +9,7 @@ import com.shine.backend.domain.testsheet.entity.TestSheet;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.Function;
 import java.util.stream.IntStream;
 
 /** 검사지 분석 결과 화면(번역 화면). 기록 탭에서 과거 검사지를 열 때도 같은 응답을 쓴다. */
@@ -35,18 +37,28 @@ public record TestSheetDetailResponse(
     public record Counts(long danger, long caution, long normal, long unknown, int total) {}
 
     public static TestSheetDetailResponse of(TestSheet sheet, List<TestResult> results) {
-        return of(sheet, results, List.of(), List.of());
+        return of(sheet, results, List.of(), List.of(), r -> null);
     }
 
     public static TestSheetDetailResponse of(TestSheet sheet, List<TestResult> results,
                                              List<Food> foods, List<String> questions) {
+        return of(sheet, results, foods, questions, r -> null);
+    }
+
+    /**
+     * @param engineMeta 업로드 때 저장해둔 판정 근거를 풀어주는 함수.
+     *                   근거를 못 읽어도 검사지는 열려야 하므로 null 을 돌려줘도 된다.
+     */
+    public static TestSheetDetailResponse of(TestSheet sheet, List<TestResult> results,
+                                             List<Food> foods, List<String> questions,
+                                             Function<TestResult, EngineMetaCodec.EngineMeta> engineMeta) {
         // 위험한 것부터 보여준다
         List<TestResultResponse> sorted = results.stream()
                 .sorted(Comparator
                         .comparingInt((TestResult r) -> severity(r.getResultStatus()))
                         .thenComparing(r -> r.getTestItem() == null ? 999
                                 : r.getTestItem().getDisplayOrder()))
-                .map(TestResultResponse::from)
+                .map(r -> TestResultResponse.from(r, engineMeta.apply(r)))
                 .toList();
 
         return new TestSheetDetailResponse(

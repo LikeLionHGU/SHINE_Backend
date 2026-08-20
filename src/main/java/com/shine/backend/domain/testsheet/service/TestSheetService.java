@@ -1,5 +1,6 @@
 package com.shine.backend.domain.testsheet.service;
 
+import com.shine.backend.domain.compat.service.EngineMetaCodec;
 import com.shine.backend.domain.testsheet.dto.*;
 import com.shine.backend.domain.testsheet.entity.AnalysisStatus;
 import com.shine.backend.domain.testsheet.entity.TestResult;
@@ -38,6 +39,7 @@ public class TestSheetService {
     private final ApplicationEventPublisher eventPublisher;
     private final QuestionRepository questionRepository;
     private final ObjectMapper objectMapper;
+    private final EngineMetaCodec engineMetaCodec;
 
     /**
      * 이미지를 저장하고 분석을 예약한다. 분석을 기다리지 않고 바로 응답한다.
@@ -99,7 +101,8 @@ public class TestSheetService {
         return TestSheetDetailResponse.of(sheet,
                 testResultRepository.findBySheetWithItem(testSheetId),
                 foodsOf(sheet),
-                questionsOf(testSheetId));
+                questionsOf(testSheetId),
+                r -> engineMetaCodec.read(r.getEngineMeta()));
     }
 
     /**

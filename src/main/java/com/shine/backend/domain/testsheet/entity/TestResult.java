@@ -10,6 +10,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -115,6 +117,24 @@ public class TestResult extends BaseTimeEntity {
     @Column(name = "brief_for_doctor", length = 500)
     private String briefForDoctor;
 
+    /**
+     * 프론트 판정 엔진이 낸 세분화 상태(safe/watch/recheck/…).
+     * result_status 는 이걸 넷으로 접은 값이라 "재검 필요"와 "지켜보기"를 구분할 수 없다.
+     */
+    @Column(name = "engine_status", length = 20)
+    private String engineStatus;
+
+    /**
+     * 판정 근거·출처·추천 질문 원본(JSON).
+     *
+     * 저장하지 않으면 기록 탭에서 지난 검사지를 다시 열었을 때 근거와 출처가 사라진다.
+     * 값으로 재판정을 시도해도 인용문까지는 복원되지 않는다(전달사항 2번).
+     * 판정 로직이 서버로 넘어오기 전까지는 프론트가 만든 것을 그대로 보관한다.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "engine_meta")
+    private String engineMeta;
+
     /** 원본 이미지 위 하이라이트. 0~1 정규화 비율이며 픽셀 절대값이 아니다. */
     @Column(name = "bbox_page")
     private Integer bboxPage;
@@ -149,6 +169,12 @@ public class TestResult extends BaseTimeEntity {
         this.textValue = textValue;
         this.editedByUser = true;
         this.briefForDoctor = null;
+    }
+
+    /** 프론트 판정 엔진이 붙여 보낸 근거를 그대로 보관한다 */
+    public void applyEngineMeta(String engineStatus, String engineMeta) {
+        this.engineStatus = engineStatus;
+        this.engineMeta = engineMeta;
     }
 
     public void applyBrief(String briefForMom, String briefForDoctor) {
