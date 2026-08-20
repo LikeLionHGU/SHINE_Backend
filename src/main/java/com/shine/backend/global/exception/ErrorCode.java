@@ -62,6 +62,9 @@ public enum ErrorCode {
     SHARE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "오늘은 더 이상 공유할 수 없어요. 내일 다시 시도해주세요."),
     EMAIL_SEND_FAILED(HttpStatus.BAD_GATEWAY, "메일 전송에 실패했습니다."),
 
+    MISSING_FILE_PART(HttpStatus.BAD_REQUEST, "파일을 찾을 수 없어요. 다시 시도해주세요."),
+    FILE_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "사진 용량이 너무 커요. 줄여서 다시 올려주세요."),
+
     // ---------- AI 프록시 ----------
     AI_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "검사지 분석 기능을 준비 중이에요. 잠시 후 다시 시도해주세요."),
     AI_MODEL_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "지원하지 않는 모델입니다."),

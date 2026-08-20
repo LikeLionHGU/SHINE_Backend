@@ -9,6 +9,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.List;
@@ -87,6 +89,34 @@ public class GlobalExceptionHandler {
     }
 
     /** 예상 못 한 예외. 내부 메시지를 사용자에게 노출하지 않는다. */
+    /**
+     * 파일 파트를 못 찾았을 때.
+     *
+     * 여태 이게 아래 Exception 핸들러에 걸려 500으로 나갔다. 클라이언트 요청이
+     * 잘못된 것인데 서버 장애처럼 보여서, 앱에서 사진이 안 올라가는 원인을
+     * 찾는 데 한참 걸렸다. 무엇이 빠졌는지 이름을 그대로 알려준다.
+     */
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ApiResponse<Object>> handleMissingPart(MissingServletRequestPartException e) {
+        ErrorCode code = ErrorCode.MISSING_FILE_PART;
+        log.warn("파일 파트 누락 [{}]", e.getRequestPartName());
+
+        return ResponseEntity.status(code.getStatus()).body(new ApiResponse<>(
+                false, code.name(),
+                "파일을 찾을 수 없습니다. '" + e.getRequestPartName() + "' 이름으로 보내주세요.",
+                null));
+    }
+
+    /** 업로드 용량 초과. 이것도 500으로 나가면 사용자가 이유를 알 수 없다. */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Object>> handleTooLarge(MaxUploadSizeExceededException e) {
+        ErrorCode code = ErrorCode.FILE_TOO_LARGE;
+        log.warn("업로드 용량 초과", e);
+
+        return ResponseEntity.status(code.getStatus())
+                .body(new ApiResponse<>(false, code.name(), code.getMessage(), null));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Object>> handleUnexpected(Exception e) {
         // 어떤 예외가 새는지 클래스 이름까지 남긴다. 이게 없으면 원인을 못 찾는다.
