@@ -106,9 +106,22 @@ public class User extends BaseTimeEntity {
         if (email != null) this.email = email;
     }
 
+    /**
+     * 보호자·추가 이메일은 지울 수 있는 칸이다.
+     *   null  → 안 보낸 것. 그대로 둔다
+     *   ""    → 지운다
+     *
+     * 예전에는 null을 그대로 대입해서, 이름만 바꾸려고 PATCH를 보내도
+     * 등록해둔 보호자 이메일이 함께 지워졌다(전달사항 5번).
+     */
     public void updateEmails(String guardianEmail, String additionalEmail) {
-        this.guardianEmail = guardianEmail;
-        this.additionalEmail = additionalEmail;
+        if (guardianEmail != null) this.guardianEmail = blankToNull(guardianEmail);
+        if (additionalEmail != null) this.additionalEmail = blankToNull(additionalEmail);
+    }
+
+    private static String blankToNull(String value) {
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     public void updateSettings(Boolean cameraAgreed, Boolean notificationEnabled) {
